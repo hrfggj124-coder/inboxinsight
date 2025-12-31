@@ -15,6 +15,7 @@ import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Cookies from "./pages/Cookies";
 import Auth from "./pages/Auth";
+import Publisher from "./pages/Publisher";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/publisher" element={<Publisher />} />
               <Route path="/article/:slug" element={<Article />} />
               <Route path="/category/:slug" element={<Category />} />
               <Route path="/categories" element={<Categories />} />

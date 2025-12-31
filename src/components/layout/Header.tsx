@@ -1,12 +1,27 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Menu, X, Search, TrendingUp } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Menu, X, Search, TrendingUp, PenSquare, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { categories } from "@/data/articles";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const { user, isPublisher, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -23,9 +38,37 @@ export const Header = () => {
           <div className="flex items-center gap-4 text-sm">
             <Link to="/about" className="text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">About</Link>
             <Link to="/contact" className="text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">Contact</Link>
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-              Sign In
-            </Button>
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground gap-2">
+                    <User className="h-4 w-4" />
+                    <span className="hidden sm:inline">Account</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  {isPublisher && (
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link to="/publisher" className="flex items-center gap-2">
+                          <PenSquare className="h-4 w-4" />
+                          Publisher Portal
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" asChild>
+                <Link to="/auth">Sign In</Link>
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -107,6 +150,16 @@ export const Header = () => {
         <div className="lg:hidden border-t border-border bg-card animate-fade-in">
           <div className="container py-4">
             <nav className="flex flex-col gap-2">
+              {isPublisher && (
+                <Link
+                  to="/publisher"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-primary hover:bg-muted transition-colors"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <PenSquare className="h-4 w-4" />
+                  Publisher Portal
+                </Link>
+              )}
               {categories.map((category) => (
                 <Link
                   key={category.slug}
@@ -121,6 +174,17 @@ export const Header = () => {
               <div className="border-t border-border my-2" />
               <Link to="/about" className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground" onClick={() => setIsMenuOpen(false)}>About</Link>
               <Link to="/contact" className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground" onClick={() => setIsMenuOpen(false)}>Contact</Link>
+              {user && (
+                <>
+                  <div className="border-t border-border my-2" />
+                  <button 
+                    onClick={() => { handleSignOut(); setIsMenuOpen(false); }}
+                    className="px-3 py-2 text-sm text-destructive text-left"
+                  >
+                    Sign Out
+                  </button>
+                </>
+              )}
             </nav>
           </div>
         </div>
