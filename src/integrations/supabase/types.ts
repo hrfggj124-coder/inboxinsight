@@ -172,39 +172,6 @@ export type Database = {
           },
         ]
       }
-      html_snippets: {
-        Row: {
-          code: string
-          created_at: string
-          id: string
-          is_active: boolean
-          location: string
-          name: string
-          priority: number
-          updated_at: string
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          location: string
-          name: string
-          priority?: number
-          updated_at?: string
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          location?: string
-          name?: string
-          priority?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
       likes: {
         Row: {
           article_id: string

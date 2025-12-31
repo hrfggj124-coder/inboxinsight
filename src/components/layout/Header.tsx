@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Menu, X, Search, TrendingUp, PenSquare, LogOut, User, Settings } from "lucide-react";
+import { Menu, X, Search, TrendingUp, PenSquare, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { categories } from "@/data/articles";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,7 +15,7 @@ import {
 export const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const { user, isPublisher, isAdmin, signOut } = useAuth();
+  const { user, isPublisher, signOut } = useAuth();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -48,29 +48,19 @@ export const Header = () => {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                   {isPublisher && (
-                    <DropdownMenuItem asChild>
-                      <Link to="/publisher" className="flex items-center gap-2">
-                        <PenSquare className="h-4 w-4" />
-                        Publisher Portal
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
-                  {isAdmin && (
-                    <DropdownMenuItem asChild>
-                      <Link to="/admin" className="flex items-center gap-2">
-                        <Settings className="h-4 w-4" />
-                        Admin Dashboard
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
-                  {(isPublisher || isAdmin) && <DropdownMenuSeparator />}
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link to="/publisher" className="flex items-center gap-2">
+                          <PenSquare className="h-4 w-4" />
+                          Publisher Portal
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                     </>
                   )}
                   <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
                     <LogOut className="h-4 w-4 mr-2" />
                     Sign Out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
