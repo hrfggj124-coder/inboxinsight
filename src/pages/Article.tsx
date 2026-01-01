@@ -4,14 +4,46 @@ import { SEOHead } from "@/components/seo/SEOHead";
 import { ArticleCard } from "@/components/articles/ArticleCard";
 import { TrendingSidebar } from "@/components/articles/TrendingSidebar";
 import { AdSlot } from "@/components/ads/AdSlot";
+import { LikeButton } from "@/components/articles/LikeButton";
+import { CommentSection } from "@/components/articles/CommentSection";
+import { useArticle, useArticles } from "@/hooks/useArticles";
 import { getArticleBySlug, getRelatedArticles } from "@/data/articles";
 import { formatDistanceToNow, format } from "date-fns";
-import { Clock, Calendar, Share2, Bookmark, Heart, MessageCircle, Twitter, Linkedin, Facebook, ArrowLeft } from "lucide-react";
+import { Clock, Calendar, Share2, Bookmark, MessageCircle, Twitter, Linkedin, Facebook, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const Article = () => {
   const { slug } = useParams();
-  const article = getArticleBySlug(slug || "");
+  
+  // Try to fetch from database first
+  const { data: dbArticle, isLoading: dbLoading } = useArticle(slug || "");
+  
+  // Fallback to static data
+  const staticArticle = getArticleBySlug(slug || "");
+  
+  // Use database article if available, otherwise static
+  const isDbArticle = !!dbArticle;
+  const article = dbArticle || staticArticle;
+
+  if (dbLoading) {
+    return (
+      <Layout>
+        <div className="container py-8">
+          <div className="grid lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-6">
+              <Skeleton className="h-8 w-48" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-6 w-3/4" />
+              <Skeleton className="h-64 w-full rounded-xl" />
+              <Skeleton className="h-40 w-full" />
+            </div>
+            <TrendingSidebar />
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   if (!article) {
     return (
@@ -27,21 +59,60 @@ const Article = () => {
     );
   }
 
-  const relatedArticles = getRelatedArticles(article, 4);
-  const timeAgo = formatDistanceToNow(new Date(article.publishedAt), { addSuffix: true });
-  const formattedDate = format(new Date(article.publishedAt), "MMMM d, yyyy");
+  // Normalize data for both DB and static articles
+  const articleData = isDbArticle
+    ? {
+        id: dbArticle.id,
+        title: dbArticle.title,
+        slug: dbArticle.slug,
+        excerpt: dbArticle.excerpt || "",
+        content: dbArticle.content,
+        image: dbArticle.cover_image || "/placeholder.svg",
+        category: dbArticle.category?.name || "Uncategorized",
+        categorySlug: dbArticle.category?.slug || "uncategorized",
+        readTime: dbArticle.read_time || 5,
+        publishedAt: dbArticle.published_at || dbArticle.created_at,
+        author: dbArticle.author?.display_name || "Staff Writer",
+        authorAvatar: dbArticle.author?.avatar_url,
+        source: dbArticle.source_name,
+        tags: dbArticle.seo_keywords || [],
+        likesCount: dbArticle.likes_count || 0,
+        commentsCount: dbArticle.comments_count || 0,
+      }
+    : {
+        id: staticArticle!.id,
+        title: staticArticle!.title,
+        slug: staticArticle!.slug,
+        excerpt: staticArticle!.excerpt,
+        content: staticArticle!.content,
+        image: staticArticle!.image,
+        category: staticArticle!.category,
+        categorySlug: staticArticle!.categorySlug,
+        readTime: staticArticle!.readTime,
+        publishedAt: staticArticle!.publishedAt,
+        author: staticArticle!.author,
+        authorAvatar: null,
+        source: staticArticle!.source,
+        tags: staticArticle!.tags,
+        likesCount: 0,
+        commentsCount: 0,
+      };
+
+  const relatedArticles = staticArticle ? getRelatedArticles(staticArticle, 4) : [];
+  const timeAgo = formatDistanceToNow(new Date(articleData.publishedAt), { addSuffix: true });
+  const formattedDate = format(new Date(articleData.publishedAt), "MMMM d, yyyy");
 
   return (
     <Layout>
       <SEOHead
-        title={article.title}
-        description={article.excerpt}
-        canonical={`/article/${article.slug}`}
+        title={articleData.title}
+        description={articleData.excerpt}
+        canonical={`/article/${articleData.slug}`}
         type="article"
-        image={article.image}
-        publishedTime={article.publishedAt}
-        author={article.author}
-        tags={article.tags}
+        image={articleData.image}
+        publishedTime={articleData.publishedAt}
+        author={articleData.author}
+        tags={articleData.tags}
       />
 
       {/* Header Ad */}
@@ -59,45 +130,49 @@ const Article = () => {
                 <ArrowLeft className="h-4 w-4" /> Home
               </Link>
               <span>/</span>
-              <Link to={`/category/${article.categorySlug}`} className="hover:text-primary transition-colors">
-                {article.category}
+              <Link to={`/category/${articleData.categorySlug}`} className="hover:text-primary transition-colors">
+                {articleData.category}
               </Link>
             </nav>
 
             {/* Category & Meta */}
             <div className="flex flex-wrap items-center gap-3 mb-4">
-              <span className={`category-badge category-${article.categorySlug}`}>
-                {article.category}
+              <span className={`category-badge category-${articleData.categorySlug}`}>
+                {articleData.category}
               </span>
               <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                <Clock className="h-4 w-4" /> {article.readTime} min read
+                <Clock className="h-4 w-4" /> {articleData.readTime} min read
               </span>
             </div>
 
             {/* Title */}
             <h1 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold mb-4 leading-tight">
-              {article.title}
+              {articleData.title}
             </h1>
 
             {/* Excerpt */}
-            <p className="text-xl text-muted-foreground mb-6">{article.excerpt}</p>
+            <p className="text-xl text-muted-foreground mb-6">{articleData.excerpt}</p>
 
             {/* Author & Date */}
             <div className="flex flex-wrap items-center gap-4 pb-6 border-b border-border">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                  <span className="text-primary font-semibold">{article.author[0]}</span>
+                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
+                  {articleData.authorAvatar ? (
+                    <img src={articleData.authorAvatar} alt={articleData.author} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-primary font-semibold">{articleData.author[0]}</span>
+                  )}
                 </div>
                 <div>
-                  <p className="font-medium">{article.author}</p>
+                  <p className="font-medium">{articleData.author}</p>
                   <p className="text-sm text-muted-foreground flex items-center gap-2">
                     <Calendar className="h-3 w-3" /> {formattedDate} • {timeAgo}
                   </p>
                 </div>
               </div>
-              {article.source && (
+              {articleData.source && (
                 <span className="text-sm text-muted-foreground">
-                  Source: {article.source}
+                  Source: {articleData.source}
                 </span>
               )}
             </div>
@@ -128,15 +203,15 @@ const Article = () => {
             {/* Featured Image */}
             <div className="my-8">
               <img
-                src={article.image}
-                alt={article.title}
+                src={articleData.image}
+                alt={articleData.title}
                 className="w-full rounded-xl"
               />
             </div>
 
             {/* Article Body */}
             <div className="prose prose-lg prose-invert max-w-none">
-              {article.content.split("\n\n").map((paragraph, index) => (
+              {articleData.content.split("\n\n").map((paragraph, index) => (
                 <p key={index} className="text-foreground/90 leading-relaxed mb-6">
                   {paragraph}
                 </p>
@@ -152,7 +227,7 @@ const Article = () => {
             <div className="mt-8 pt-6 border-t border-border">
               <h4 className="text-sm font-semibold mb-3">Related Topics</h4>
               <div className="flex flex-wrap gap-2">
-                {article.tags.map((tag) => (
+                {articleData.tags.map((tag) => (
                   <Link
                     key={tag}
                     to={`/search?q=${tag}`}
@@ -164,20 +239,37 @@ const Article = () => {
               </div>
             </div>
 
-            {/* Engagement */}
+            {/* Engagement Section */}
             <div className="mt-8 p-6 bg-card rounded-xl border border-border">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-4">
-                  <Button variant="ghost" className="gap-2">
-                    <Heart className="h-5 w-5" /> Like
-                  </Button>
-                  <Button variant="ghost" className="gap-2">
-                    <MessageCircle className="h-5 w-5" /> Comment
-                  </Button>
+                  {isDbArticle ? (
+                    <>
+                      <LikeButton articleId={articleData.id} />
+                      <Button variant="ghost" className="gap-2">
+                        <MessageCircle className="h-5 w-5" />
+                        {articleData.commentsCount > 0 && <span>{articleData.commentsCount}</span>}
+                        {articleData.commentsCount === 0 && <span>Comment</span>}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button variant="ghost" className="gap-2" disabled>
+                        <MessageCircle className="h-5 w-5" /> Comments unavailable
+                      </Button>
+                    </>
+                  )}
                 </div>
-                <p className="text-sm text-muted-foreground">Sign in to engage</p>
+                {!isDbArticle && (
+                  <p className="text-sm text-muted-foreground">
+                    Engagement features available for published articles
+                  </p>
+                )}
               </div>
             </div>
+
+            {/* Comments Section - Only for DB articles */}
+            {isDbArticle && <CommentSection articleId={articleData.id} />}
 
             {/* Related Articles */}
             {relatedArticles.length > 0 && (
