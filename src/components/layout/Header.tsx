@@ -14,6 +14,7 @@ import {
 
 export const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const { user, isPublisher, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
@@ -21,6 +22,15 @@ export const Header = () => {
   const handleSignOut = async () => {
     await signOut();
     navigate("/");
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      setSearchQuery("");
+      setIsSearchOpen(false);
+    }
   };
 
   return (
@@ -137,17 +147,19 @@ export const Header = () => {
 
         {/* Search Bar */}
         {isSearchOpen && (
-          <div className="border-t border-border py-4 animate-fade-in">
+          <form onSubmit={handleSearch} className="border-t border-border py-4 animate-fade-in">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search articles, topics, authors..."
                 className="w-full bg-muted rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 autoFocus
               />
             </div>
-          </div>
+          </form>
         )}
       </div>
 
