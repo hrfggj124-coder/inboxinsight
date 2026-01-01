@@ -64,13 +64,9 @@ export const Header = () => {
                     </DropdownMenuItem>
                   )}
                   {(isPublisher || isAdmin) && <DropdownMenuSeparator />}
-                    </>
-                  )}
                   <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
                     <LogOut className="h-4 w-4 mr-2" />
                     Sign Out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
