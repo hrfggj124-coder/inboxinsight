@@ -6,15 +6,20 @@ import { TrendingSidebar } from "@/components/articles/TrendingSidebar";
 import { AdSlot } from "@/components/ads/AdSlot";
 import { LikeButton } from "@/components/articles/LikeButton";
 import { CommentSection } from "@/components/articles/CommentSection";
-import { useArticle, useArticles } from "@/hooks/useArticles";
+import { ShareButtons } from "@/components/articles/ShareButtons";
+import { useArticle } from "@/hooks/useArticles";
+import { useRealtimeComments } from "@/hooks/useRealtimeComments";
+import { useRealtimeLikes } from "@/hooks/useRealtimeLikes";
+import { useAuth } from "@/contexts/AuthContext";
 import { getArticleBySlug, getRelatedArticles } from "@/data/articles";
 import { formatDistanceToNow, format } from "date-fns";
-import { Clock, Calendar, Share2, Bookmark, MessageCircle, Twitter, Linkedin, Facebook, ArrowLeft } from "lucide-react";
+import { Clock, Calendar, Bookmark, MessageCircle, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const Article = () => {
   const { slug } = useParams();
+  const { user } = useAuth();
   
   // Try to fetch from database first
   const { data: dbArticle, isLoading: dbLoading } = useArticle(slug || "");
@@ -25,6 +30,10 @@ const Article = () => {
   // Use database article if available, otherwise static
   const isDbArticle = !!dbArticle;
   const article = dbArticle || staticArticle;
+
+  // Enable realtime subscriptions for DB articles
+  useRealtimeComments(isDbArticle ? dbArticle!.id : "");
+  useRealtimeLikes(isDbArticle ? dbArticle!.id : "", user?.id);
 
   if (dbLoading) {
     return (
@@ -180,20 +189,7 @@ const Article = () => {
             {/* Share Bar */}
             <div className="flex flex-wrap items-center gap-4 py-4 border-b border-border">
               <span className="text-sm text-muted-foreground">Share:</span>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="h-9 w-9">
-                  <Twitter className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9">
-                  <Facebook className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9">
-                  <Linkedin className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9">
-                  <Share2 className="h-4 w-4" />
-                </Button>
-              </div>
+              <ShareButtons title={articleData.title} />
               <div className="flex-1" />
               <Button variant="ghost" size="sm" className="gap-2">
                 <Bookmark className="h-4 w-4" /> Save
