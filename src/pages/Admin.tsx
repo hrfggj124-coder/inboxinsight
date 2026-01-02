@@ -4,13 +4,15 @@ import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, FileCheck, Rss, Code, ShieldAlert } from "lucide-react";
+import { Users, FileCheck, Rss, Code, ShieldAlert, FolderTree, FileText, Settings } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserManagement } from "@/components/admin/UserManagement";
 import { ArticleApproval } from "@/components/admin/ArticleApproval";
 import { RSSFeedManager } from "@/components/admin/RSSFeedManager";
 import { HTMLSnippets } from "@/components/admin/HTMLSnippets";
-
+import { CategoryManagement } from "@/components/admin/CategoryManagement";
+import { ArticleManagement } from "@/components/admin/ArticleManagement";
+import { SettingsPanel } from "@/components/admin/SettingsPanel";
 const Admin = () => {
   const { user, loading, isAdmin } = useAuth();
   const navigate = useNavigate();
@@ -88,10 +90,18 @@ const Admin = () => {
         </div>
 
         <Tabs defaultValue="articles" className="space-y-6">
-          <TabsList className="bg-card border border-border">
+          <TabsList className="bg-card border border-border flex-wrap h-auto gap-1 p-1">
             <TabsTrigger value="articles" className="flex items-center gap-2">
               <FileCheck className="h-4 w-4" />
-              Article Approval
+              Approval
+            </TabsTrigger>
+            <TabsTrigger value="all-articles" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Articles
+            </TabsTrigger>
+            <TabsTrigger value="categories" className="flex items-center gap-2">
+              <FolderTree className="h-4 w-4" />
+              Categories
             </TabsTrigger>
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
@@ -99,16 +109,28 @@ const Admin = () => {
             </TabsTrigger>
             <TabsTrigger value="rss" className="flex items-center gap-2">
               <Rss className="h-4 w-4" />
-              RSS Feeds
+              RSS
             </TabsTrigger>
             <TabsTrigger value="html" className="flex items-center gap-2">
               <Code className="h-4 w-4" />
-              HTML Snippets
+              HTML
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Settings
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="articles" className="mt-6">
             <ArticleApproval />
+          </TabsContent>
+
+          <TabsContent value="all-articles" className="mt-6">
+            <ArticleManagement />
+          </TabsContent>
+
+          <TabsContent value="categories" className="mt-6">
+            <CategoryManagement />
           </TabsContent>
 
           <TabsContent value="users" className="mt-6">
@@ -121,6 +143,10 @@ const Admin = () => {
 
           <TabsContent value="html" className="mt-6">
             <HTMLSnippets />
+          </TabsContent>
+
+          <TabsContent value="settings" className="mt-6">
+            <SettingsPanel />
           </TabsContent>
         </Tabs>
       </div>
