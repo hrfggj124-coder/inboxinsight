@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,22 +13,160 @@ interface GenerateArticleRequest {
   title?: string;
 }
 
+// Input validation constants
+const MAX_TOPIC_LENGTH = 500;
+const MAX_CONTENT_LENGTH = 50000;
+const MAX_TITLE_LENGTH = 300;
+const VALID_TYPES = ['generate', 'suggest-headline', 'suggest-summary', 'suggest-seo', 'improve-content'];
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured');
+    // ====== AUTHENTICATION ======
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error('No authorization header provided');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized: No authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    const { type, topic, content, title }: GenerateArticleRequest = await req.json();
-    console.log('AI Content request:', { type, topic: topic?.substring(0, 50), hasContent: !!content });
+    // Create Supabase client with user's auth context
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: { Authorization: authHeader },
+      },
+    });
+
+    // Verify user is authenticated
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      console.error('Authentication failed:', authError?.message || 'No user found');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized: Invalid authentication' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Authenticated user:', user.id);
+
+    // ====== AUTHORIZATION ======
+    // Check if user has publisher or admin role
+    const { data: roles, error: rolesError } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id);
+
+    if (rolesError) {
+      console.error('Error fetching user roles:', rolesError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to verify user permissions' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const hasPublisherAccess = roles?.some(r => 
+      r.role === 'publisher' || r.role === 'admin'
+    );
+
+    if (!hasPublisherAccess) {
+      console.warn('User lacks publisher/admin role:', user.id);
+      return new Response(
+        JSON.stringify({ error: 'Forbidden: Publisher or Admin role required to use AI content tools' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('User authorized with roles:', roles?.map(r => r.role).join(', '));
+
+    // ====== INPUT VALIDATION ======
+    let requestBody: GenerateArticleRequest;
+    try {
+      requestBody = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: 'Invalid request body: Expected JSON' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { type, topic, content, title } = requestBody;
+
+    // Validate type
+    if (!type || !VALID_TYPES.includes(type)) {
+      return new Response(
+        JSON.stringify({ error: `Invalid type. Must be one of: ${VALID_TYPES.join(', ')}` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate inputs based on type
+    if (type === 'generate') {
+      if (!topic || typeof topic !== 'string' || topic.trim().length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'Topic is required for article generation' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      if (topic.length > MAX_TOPIC_LENGTH) {
+        return new Response(
+          JSON.stringify({ error: `Topic must be ${MAX_TOPIC_LENGTH} characters or less` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    if (['suggest-headline', 'suggest-summary', 'suggest-seo', 'improve-content'].includes(type)) {
+      if (!content || typeof content !== 'string' || content.trim().length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'Content is required for this operation' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      if (content.length > MAX_CONTENT_LENGTH) {
+        return new Response(
+          JSON.stringify({ error: `Content must be ${MAX_CONTENT_LENGTH} characters or less` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    if (['suggest-summary', 'suggest-seo', 'improve-content'].includes(type)) {
+      if (title && title.length > MAX_TITLE_LENGTH) {
+        return new Response(
+          JSON.stringify({ error: `Title must be ${MAX_TITLE_LENGTH} characters or less` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    console.log('AI Content request validated:', { type, userId: user.id, topicLength: topic?.length, contentLength: content?.length });
+
+    // ====== AI PROCESSING ======
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      console.error('LOVABLE_API_KEY is not configured');
+      return new Response(
+        JSON.stringify({ error: 'Server configuration error' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     let systemPrompt = '';
     let userPrompt = '';
+
+    // Sanitize user inputs by limiting their length in prompts
+    const sanitizedTopic = topic?.substring(0, MAX_TOPIC_LENGTH) || '';
+    const sanitizedContent = content?.substring(0, MAX_CONTENT_LENGTH) || '';
+    const sanitizedTitle = title?.substring(0, MAX_TITLE_LENGTH) || '';
 
     switch (type) {
       case 'generate':
@@ -40,7 +179,7 @@ serve(async (req) => {
 - 3-5 relevant tags
 - Estimated read time in minutes
 
-Topic: ${topic}
+Topic: ${sanitizedTopic}
 
 Respond in JSON format:
 {
@@ -57,7 +196,7 @@ Respond in JSON format:
         systemPrompt = `You are an expert headline writer for tech news. Create compelling, SEO-optimized headlines that are accurate and engaging.`;
         userPrompt = `Based on this article content, suggest 5 alternative headlines that are compelling and SEO-friendly:
 
-${content?.substring(0, 2000)}
+${sanitizedContent.substring(0, 2000)}
 
 Respond in JSON format:
 {
@@ -69,8 +208,8 @@ Respond in JSON format:
         systemPrompt = `You are a tech news editor skilled at writing concise, engaging article summaries.`;
         userPrompt = `Write 3 alternative summaries/excerpts (2-3 sentences each) for this article:
 
-Title: ${title}
-Content: ${content?.substring(0, 2000)}
+Title: ${sanitizedTitle}
+Content: ${sanitizedContent.substring(0, 2000)}
 
 Respond in JSON format:
 {
@@ -82,8 +221,8 @@ Respond in JSON format:
         systemPrompt = `You are an SEO expert specializing in tech news content optimization.`;
         userPrompt = `Analyze this article and provide SEO recommendations:
 
-Title: ${title}
-Content: ${content?.substring(0, 2000)}
+Title: ${sanitizedTitle}
+Content: ${sanitizedContent.substring(0, 2000)}
 
 Provide:
 - Optimized meta title (under 60 characters)
@@ -104,8 +243,8 @@ Respond in JSON format:
         systemPrompt = `You are a tech news editor who improves article quality while maintaining the author's voice.`;
         userPrompt = `Improve this article for clarity, engagement, and accuracy. Keep the core message but enhance readability:
 
-Title: ${title}
-Content: ${content}
+Title: ${sanitizedTitle}
+Content: ${sanitizedContent}
 
 Respond in JSON format:
 {
@@ -115,10 +254,13 @@ Respond in JSON format:
         break;
 
       default:
-        throw new Error('Invalid request type');
+        return new Response(
+          JSON.stringify({ error: 'Invalid request type' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
     }
 
-    console.log('Calling Lovable AI with type:', type);
+    console.log('Calling Lovable AI with type:', type, 'for user:', user.id);
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -152,17 +294,24 @@ Respond in JSON format:
           { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      throw new Error(`AI Gateway error: ${response.status}`);
+      return new Response(
+        JSON.stringify({ error: 'AI service temporarily unavailable' }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const data = await response.json();
     const aiResponse = data.choices?.[0]?.message?.content;
     
     if (!aiResponse) {
-      throw new Error('No response from AI');
+      console.error('No response content from AI');
+      return new Response(
+        JSON.stringify({ error: 'No response from AI service' }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    console.log('AI response received, length:', aiResponse.length);
+    console.log('AI response received, length:', aiResponse.length, 'for user:', user.id);
 
     // Parse JSON from response
     let parsedResponse;
@@ -184,8 +333,9 @@ Respond in JSON format:
 
   } catch (error) {
     console.error('AI Content error:', error);
+    // Don't expose internal error details to client
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: 'An unexpected error occurred' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
