@@ -34,6 +34,8 @@ import { Plus, Trash2, Edit, Code, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
 
 interface HTMLSnippet {
   id: string;
@@ -45,6 +47,28 @@ interface HTMLSnippet {
   created_at: string;
   updated_at: string;
 }
+
+// Validation constants
+const MAX_NAME_LENGTH = 100;
+const MAX_CODE_LENGTH = 50000;
+const MIN_CODE_LENGTH = 1;
+
+// Validation helper
+const validateSnippet = (name: string, code: string): string | null => {
+  if (!name || name.trim().length === 0) {
+    return "Name is required";
+  }
+  if (name.length > MAX_NAME_LENGTH) {
+    return `Name must be ${MAX_NAME_LENGTH} characters or less`;
+  }
+  if (!code || code.trim().length < MIN_CODE_LENGTH) {
+    return "Code is required";
+  }
+  if (code.length > MAX_CODE_LENGTH) {
+    return `Code must be ${MAX_CODE_LENGTH} characters or less`;
+  }
+  return null;
+};
 
 const LOCATIONS = [
   { value: 'header', label: 'Header (before </head>)' },
@@ -60,6 +84,7 @@ export const HTMLSnippets = () => {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSnippet, setEditingSnippet] = useState<HTMLSnippet | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     location: "header",
@@ -84,12 +109,18 @@ export const HTMLSnippets = () => {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      // Validate inputs before saving
+      const error = validateSnippet(formData.name, formData.code);
+      if (error) {
+        throw new Error(error);
+      }
+
       const snippetData = {
-        name: formData.name,
+        name: formData.name.trim().substring(0, MAX_NAME_LENGTH),
         location: formData.location,
-        code: formData.code,
+        code: formData.code.substring(0, MAX_CODE_LENGTH),
         is_active: formData.is_active,
-        priority: formData.priority,
+        priority: Math.max(0, Math.min(1000, formData.priority)), // Limit priority range
       };
 
       if (editingSnippet) {
@@ -116,9 +147,10 @@ export const HTMLSnippets = () => {
       handleCloseDialog();
     },
     onError: (error) => {
+      setValidationError(error instanceof Error ? error.message : "An error occurred");
       toast({
         title: "Error",
-        description: error.message,
+        description: error instanceof Error ? error.message : "An error occurred",
         variant: "destructive",
       });
     },
@@ -194,6 +226,7 @@ export const HTMLSnippets = () => {
   const handleCloseDialog = () => {
     setDialogOpen(false);
     setEditingSnippet(null);
+    setValidationError(null);
     setFormData({
       name: "",
       location: "header",
@@ -348,15 +381,38 @@ export const HTMLSnippets = () => {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
+            {/* Security Warning */}
+            <Alert variant="default" className="border-amber-500/50 bg-amber-500/10">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <AlertDescription className="text-sm">
+                <strong>Security Notice:</strong> Only add trusted code from verified sources. 
+                Malicious scripts can compromise your site and users.
+              </AlertDescription>
+            </Alert>
+
+            {validationError && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{validationError}</AlertDescription>
+              </Alert>
+            )}
+
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Snippet Name</Label>
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) => {
+                    setValidationError(null);
+                    setFormData({ ...formData, name: e.target.value.substring(0, MAX_NAME_LENGTH) });
+                  }}
                   placeholder="Google AdSense Header"
+                  maxLength={MAX_NAME_LENGTH}
                 />
+                <p className="text-xs text-muted-foreground">
+                  {formData.name.length}/{MAX_NAME_LENGTH} characters
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -384,23 +440,37 @@ export const HTMLSnippets = () => {
               <Textarea
                 id="code"
                 value={formData.code}
-                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                onChange={(e) => {
+                  setValidationError(null);
+                  setFormData({ ...formData, code: e.target.value.substring(0, MAX_CODE_LENGTH) });
+                }}
                 placeholder="<script>...</script>"
                 className="font-mono text-sm min-h-[200px]"
+                maxLength={MAX_CODE_LENGTH}
               />
-              <p className="text-xs text-muted-foreground">
-                Paste your ad code, tracking script, or any HTML/JavaScript.
-              </p>
+              <div className="flex justify-between">
+                <p className="text-xs text-muted-foreground">
+                  Only add code from trusted sources like Google AdSense, Analytics, etc.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {formData.code.length.toLocaleString()}/{MAX_CODE_LENGTH.toLocaleString()}
+                </p>
+              </div>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="priority">Priority (higher = first)</Label>
+                <Label htmlFor="priority">Priority (higher = first, max 1000)</Label>
                 <Input
                   id="priority"
                   type="number"
+                  min={0}
+                  max={1000}
                   value={formData.priority}
-                  onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => setFormData({ 
+                    ...formData, 
+                    priority: Math.max(0, Math.min(1000, parseInt(e.target.value) || 0)) 
+                  })}
                 />
               </div>
 
