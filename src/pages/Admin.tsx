@@ -4,7 +4,7 @@ import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, FileCheck, Rss, Code, ShieldAlert, FolderTree, FileText, Settings } from "lucide-react";
+import { Users, FileCheck, Rss, Code, ShieldAlert, FolderTree, FileText, Settings, BarChart3 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserManagement } from "@/components/admin/UserManagement";
 import { ArticleApproval } from "@/components/admin/ArticleApproval";
@@ -13,6 +13,7 @@ import { HTMLSnippets } from "@/components/admin/HTMLSnippets";
 import { CategoryManagement } from "@/components/admin/CategoryManagement";
 import { ArticleManagement } from "@/components/admin/ArticleManagement";
 import { SettingsPanel } from "@/components/admin/SettingsPanel";
+import { AnalyticsDashboard } from "@/components/admin/AnalyticsDashboard";
 const Admin = () => {
   const { user, loading, isAdmin } = useAuth();
   const navigate = useNavigate();
@@ -89,8 +90,12 @@ const Admin = () => {
           </p>
         </div>
 
-        <Tabs defaultValue="articles" className="space-y-6">
+        <Tabs defaultValue="analytics" className="space-y-6">
           <TabsList className="bg-card border border-border flex-wrap h-auto gap-1 p-1">
+            <TabsTrigger value="analytics" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Analytics
+            </TabsTrigger>
             <TabsTrigger value="articles" className="flex items-center gap-2">
               <FileCheck className="h-4 w-4" />
               Approval
@@ -120,6 +125,10 @@ const Admin = () => {
               Settings
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="analytics" className="mt-6">
+            <AnalyticsDashboard />
+          </TabsContent>
 
           <TabsContent value="articles" className="mt-6">
             <ArticleApproval />

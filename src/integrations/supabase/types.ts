@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      analytics_snapshots: {
+        Row: {
+          created_at: string | null
+          id: string
+          new_users: number | null
+          published_articles: number | null
+          snapshot_date: string
+          total_articles: number | null
+          total_comments: number | null
+          total_likes: number | null
+          total_users: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          new_users?: number | null
+          published_articles?: number | null
+          snapshot_date: string
+          total_articles?: number | null
+          total_comments?: number | null
+          total_likes?: number | null
+          total_users?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          new_users?: number | null
+          published_articles?: number | null
+          snapshot_date?: string
+          total_articles?: number | null
+          total_comments?: number | null
+          total_likes?: number | null
+          total_users?: number | null
+        }
+        Relationships: []
+      }
       articles: {
         Row: {
           author_id: string | null
@@ -22,6 +58,7 @@ export type Database = {
           content: string
           cover_image: string | null
           created_at: string
+          daily_views: Json | null
           excerpt: string | null
           id: string
           is_featured: boolean | null
@@ -46,6 +83,7 @@ export type Database = {
           content: string
           cover_image?: string | null
           created_at?: string
+          daily_views?: Json | null
           excerpt?: string | null
           id?: string
           is_featured?: boolean | null
@@ -70,6 +108,7 @@ export type Database = {
           content?: string
           cover_image?: string | null
           created_at?: string
+          daily_views?: Json | null
           excerpt?: string | null
           id?: string
           is_featured?: boolean | null
@@ -233,6 +272,75 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      notification_queue: {
+        Row: {
+          body: string
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          notification_type: string
+          recipient_user_id: string
+          sent_at: string | null
+          status: string | null
+          subject: string
+        }
+        Insert: {
+          body: string
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          notification_type: string
+          recipient_user_id: string
+          sent_at?: string | null
+          status?: string | null
+          subject: string
+        }
+        Update: {
+          body?: string
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          notification_type?: string
+          recipient_user_id?: string
+          sent_at?: string | null
+          status?: string | null
+          subject?: string
+        }
+        Relationships: []
+      }
+      notification_settings: {
+        Row: {
+          created_at: string | null
+          email_on_approval: boolean | null
+          email_on_comment: boolean | null
+          email_on_like: boolean | null
+          email_on_rejection: boolean | null
+          id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          email_on_approval?: boolean | null
+          email_on_comment?: boolean | null
+          email_on_like?: boolean | null
+          email_on_rejection?: boolean | null
+          id?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          email_on_approval?: boolean | null
+          email_on_comment?: boolean | null
+          email_on_like?: boolean | null
+          email_on_rejection?: boolean | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {

@@ -44,6 +44,7 @@ import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ImageUpload } from "@/components/shared/ImageUpload";
 
 type ArticleStatus = 'draft' | 'pending' | 'published' | 'rejected';
 
@@ -462,15 +463,11 @@ export const ArticleManagement = () => {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="cover_image">Cover Image URL</Label>
-                <Input
-                  id="cover_image"
-                  value={formData.cover_image}
-                  onChange={(e) => setFormData(prev => ({ ...prev, cover_image: e.target.value }))}
-                  placeholder="https://example.com/image.jpg"
-                />
-              </div>
+              <ImageUpload
+                value={formData.cover_image}
+                onChange={(url) => setFormData(prev => ({ ...prev, cover_image: url }))}
+                label="Cover Image"
+              />
 
               <div className="space-y-2">
                 <Label htmlFor="excerpt">Excerpt</Label>

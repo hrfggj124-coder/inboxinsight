@@ -83,7 +83,12 @@ export const ArticleApproval = () => {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ articleId, status }: { articleId: string; status: ArticleStatus }) => {
+    mutationFn: async ({ articleId, status, authorId, articleTitle }: { 
+      articleId: string; 
+      status: ArticleStatus;
+      authorId: string;
+      articleTitle: string;
+    }) => {
       const updateData: any = { status };
       if (status === 'published') {
         updateData.published_at = new Date().toISOString();
@@ -95,6 +100,20 @@ export const ArticleApproval = () => {
         .eq('id', articleId);
 
       if (error) throw error;
+
+      // Send notification email (fire and forget - don't block on failure)
+      try {
+        await supabase.functions.invoke('send-notification', {
+          body: {
+            type: status === 'published' ? 'article_approved' : 'article_rejected',
+            recipient_user_id: authorId,
+            article_id: articleId,
+            article_title: articleTitle,
+          }
+        });
+      } catch (notifError) {
+        console.log('Notification not sent (optional):', notifError);
+      }
     },
     onSuccess: (_, { status }) => {
       queryClient.invalidateQueries({ queryKey: ['admin-pending-articles'] });
@@ -203,6 +222,8 @@ export const ArticleApproval = () => {
                             onClick={() => updateStatusMutation.mutate({
                               articleId: article.id,
                               status: 'rejected',
+                              authorId: article.author_id,
+                              articleTitle: article.title,
                             })}
                             disabled={updateStatusMutation.isPending}
                           >
@@ -213,6 +234,8 @@ export const ArticleApproval = () => {
                             onClick={() => updateStatusMutation.mutate({
                               articleId: article.id,
                               status: 'published',
+                              authorId: article.author_id,
+                              articleTitle: article.title,
                             })}
                             disabled={updateStatusMutation.isPending}
                           >
@@ -312,6 +335,8 @@ export const ArticleApproval = () => {
                 updateStatusMutation.mutate({
                   articleId: previewArticle.id,
                   status: 'rejected',
+                  authorId: previewArticle.author_id,
+                  articleTitle: previewArticle.title,
                 });
               }}
               disabled={updateStatusMutation.isPending}
@@ -324,6 +349,8 @@ export const ArticleApproval = () => {
                 updateStatusMutation.mutate({
                   articleId: previewArticle.id,
                   status: 'published',
+                  authorId: previewArticle.author_id,
+                  articleTitle: previewArticle.title,
                 });
               }}
               disabled={updateStatusMutation.isPending}
