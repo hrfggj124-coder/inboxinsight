@@ -3,8 +3,27 @@ import { Clock, TrendingUp } from "lucide-react";
 import { Article } from "@/data/articles";
 import { formatDistanceToNow } from "date-fns";
 
+interface NormalizedArticle {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt?: string;
+  content?: string;
+  category: string;
+  categorySlug: string;
+  author: string;
+  authorAvatar?: string | null;
+  publishedAt: string;
+  readTime: number;
+  image: string;
+  featured?: boolean;
+  trending?: boolean;
+  source?: string;
+  tags?: string[];
+}
+
 interface ArticleCardProps {
-  article: Article;
+  article: Article | NormalizedArticle;
   variant?: "default" | "featured" | "compact" | "horizontal";
 }
 

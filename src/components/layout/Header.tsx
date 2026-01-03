@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Menu, X, Search, TrendingUp, PenSquare, LogOut, User, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { categories } from "@/data/articles";
+import { useCategories } from "@/hooks/useArticles";
+import { categories as staticCategories } from "@/data/articles";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   DropdownMenu,
@@ -18,6 +19,17 @@ export const Header = () => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const { user, isPublisher, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
+  
+  // Fetch categories from database
+  const { data: dbCategories } = useCategories();
+  
+  const categories = dbCategories && dbCategories.length > 0
+    ? dbCategories.map(cat => ({
+        name: cat.name,
+        slug: cat.slug,
+        color: cat.color || cat.slug,
+      }))
+    : staticCategories;
 
   const handleSignOut = async () => {
     await signOut();
