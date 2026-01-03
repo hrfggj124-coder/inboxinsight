@@ -3,15 +3,83 @@ import { SEOHead } from "@/components/seo/SEOHead";
 import { ArticleCard } from "@/components/articles/ArticleCard";
 import { TrendingSidebar } from "@/components/articles/TrendingSidebar";
 import { AdSlot } from "@/components/ads/AdSlot";
-import { articles, getFeaturedArticles, categories } from "@/data/articles";
+import { useArticles, useCategories } from "@/hooks/useArticles";
+import { articles as staticArticles, getFeaturedArticles, categories as staticCategories } from "@/data/articles";
 import { Link } from "react-router-dom";
 import { ArrowRight, Zap } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const Index = () => {
-  const featured = getFeaturedArticles();
-  const latestArticles = articles.slice(0, 12);
+  // Fetch from database
+  const { data: dbArticles, isLoading: articlesLoading } = useArticles({ 
+    status: 'published', 
+    limit: 20 
+  });
+  const { data: dbCategories, isLoading: categoriesLoading } = useCategories();
+  const { data: featuredArticles } = useArticles({ 
+    status: 'published', 
+    featured: true, 
+    limit: 3 
+  });
+
+  // Use DB articles if available, otherwise fall back to static
+  const hasDbArticles = dbArticles && dbArticles.length > 0;
+  const hasDbCategories = dbCategories && dbCategories.length > 0;
+
+  // Normalize articles for display
+  const normalizedArticles = hasDbArticles 
+    ? dbArticles.map(article => ({
+        id: article.id,
+        title: article.title,
+        slug: article.slug,
+        excerpt: article.excerpt || "",
+        content: article.content,
+        category: article.category?.name || "Uncategorized",
+        categorySlug: article.category?.slug || "uncategorized",
+        author: article.author?.display_name || "Staff Writer",
+        publishedAt: article.published_at || article.created_at,
+        readTime: article.read_time || 5,
+        image: article.cover_image || "/placeholder.svg",
+        featured: article.is_featured || false,
+        trending: (article.views_count || 0) > 100,
+        tags: article.seo_keywords || [],
+      }))
+    : staticArticles;
+
+  const categories = hasDbCategories 
+    ? dbCategories.map(cat => ({
+        name: cat.name,
+        slug: cat.slug,
+        description: cat.description || "",
+        color: cat.color || cat.slug,
+      }))
+    : staticCategories;
+
+  // Get featured articles
+  const featured = hasDbArticles && featuredArticles && featuredArticles.length > 0
+    ? featuredArticles.map(article => ({
+        id: article.id,
+        title: article.title,
+        slug: article.slug,
+        excerpt: article.excerpt || "",
+        content: article.content,
+        category: article.category?.name || "Uncategorized",
+        categorySlug: article.category?.slug || "uncategorized",
+        author: article.author?.display_name || "Staff Writer",
+        publishedAt: article.published_at || article.created_at,
+        readTime: article.read_time || 5,
+        image: article.cover_image || "/placeholder.svg",
+        featured: true,
+        trending: (article.views_count || 0) > 100,
+        tags: article.seo_keywords || [],
+      }))
+    : getFeaturedArticles();
+
   const mainFeatured = featured[0];
   const sideFeatured = featured.slice(1, 3);
+  const latestArticles = normalizedArticles.slice(0, 12);
+
+  const isLoading = articlesLoading || categoriesLoading;
 
   return (
     <Layout>
@@ -28,39 +96,51 @@ const Index = () => {
 
       {/* Hero Section */}
       <section className="container py-8">
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Main Featured */}
-          <div className="lg:col-span-2">
-            {mainFeatured && <ArticleCard article={mainFeatured} variant="featured" />}
+        {isLoading ? (
+          <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <Skeleton className="aspect-[16/9] rounded-xl" />
+            </div>
+            <div className="space-y-4">
+              <Skeleton className="h-48 rounded-xl" />
+              <Skeleton className="h-48 rounded-xl" />
+            </div>
           </div>
+        ) : (
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* Main Featured */}
+            <div className="lg:col-span-2">
+              {mainFeatured && <ArticleCard article={mainFeatured} variant="featured" />}
+            </div>
 
-          {/* Side Featured */}
-          <div className="space-y-4">
-            {sideFeatured.map((article) => (
-              <Link
-                key={article.id}
-                to={`/article/${article.slug}`}
-                className="group block rounded-xl overflow-hidden bg-card border border-border card-hover"
-              >
-                <div className="aspect-video overflow-hidden">
-                  <img
-                    src={article.image}
-                    alt={article.title}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                </div>
-                <div className="p-4">
-                  <span className={`category-badge category-${article.categorySlug} mb-2`}>
-                    {article.category}
-                  </span>
-                  <h3 className="font-display font-semibold line-clamp-2 group-hover:text-primary transition-colors">
-                    {article.title}
-                  </h3>
-                </div>
-              </Link>
-            ))}
+            {/* Side Featured */}
+            <div className="space-y-4">
+              {sideFeatured.map((article) => (
+                <Link
+                  key={article.id}
+                  to={`/article/${article.slug}`}
+                  className="group block rounded-xl overflow-hidden bg-card border border-border card-hover"
+                >
+                  <div className="aspect-video overflow-hidden">
+                    <img
+                      src={article.image}
+                      alt={article.title}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                  </div>
+                  <div className="p-4">
+                    <span className={`category-badge category-${article.categorySlug} mb-2`}>
+                      {article.category}
+                    </span>
+                    <h3 className="font-display font-semibold line-clamp-2 group-hover:text-primary transition-colors">
+                      {article.title}
+                    </h3>
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       {/* Breaking News Ticker */}
@@ -73,7 +153,7 @@ const Index = () => {
             </div>
             <div className="overflow-hidden">
               <div className="flex gap-8 animate-[marquee_30s_linear_infinite] whitespace-nowrap">
-                {articles.slice(0, 5).map((article) => (
+                {normalizedArticles.slice(0, 5).map((article) => (
                   <Link
                     key={article.id}
                     to={`/article/${article.slug}`}
@@ -95,34 +175,51 @@ const Index = () => {
           <div className="lg:col-span-2">
             <div className="flex items-center justify-between mb-6">
               <h2 className="font-display text-2xl font-bold">Latest News</h2>
-              <Link to="/category/all" className="text-sm text-primary hover:text-primary/80 flex items-center gap-1">
+              <Link to="/categories" className="text-sm text-primary hover:text-primary/80 flex items-center gap-1">
                 View all <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-6">
-              {latestArticles.slice(0, 4).map((article) => (
-                <ArticleCard key={article.id} article={article} />
-              ))}
-            </div>
+            {isLoading ? (
+              <div className="grid sm:grid-cols-2 gap-6">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="rounded-xl border border-border overflow-hidden">
+                    <Skeleton className="aspect-[16/10]" />
+                    <div className="p-5 space-y-3">
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-6 w-full" />
+                      <Skeleton className="h-4 w-3/4" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <>
+                <div className="grid sm:grid-cols-2 gap-6">
+                  {latestArticles.slice(0, 4).map((article) => (
+                    <ArticleCard key={article.id} article={article} />
+                  ))}
+                </div>
 
-            {/* Inline Ad */}
-            <div className="my-8">
-              <AdSlot type="inline" />
-            </div>
+                {/* Inline Ad */}
+                <div className="my-8">
+                  <AdSlot type="inline" />
+                </div>
 
-            <div className="grid sm:grid-cols-2 gap-6">
-              {latestArticles.slice(4, 8).map((article) => (
-                <ArticleCard key={article.id} article={article} />
-              ))}
-            </div>
+                <div className="grid sm:grid-cols-2 gap-6">
+                  {latestArticles.slice(4, 8).map((article) => (
+                    <ArticleCard key={article.id} article={article} />
+                  ))}
+                </div>
 
-            {/* More horizontal articles */}
-            <div className="mt-8 space-y-6">
-              {latestArticles.slice(8, 12).map((article) => (
-                <ArticleCard key={article.id} article={article} variant="horizontal" />
-              ))}
-            </div>
+                {/* More horizontal articles */}
+                <div className="mt-8 space-y-6">
+                  {latestArticles.slice(8, 12).map((article) => (
+                    <ArticleCard key={article.id} article={article} variant="horizontal" />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Sidebar */}

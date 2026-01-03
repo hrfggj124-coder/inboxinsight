@@ -1,8 +1,18 @@
 import { Link } from "react-router-dom";
 import { Twitter, Linkedin, Github, Youtube, Mail } from "lucide-react";
-import { categories } from "@/data/articles";
+import { useCategories } from "@/hooks/useArticles";
+import { categories as staticCategories } from "@/data/articles";
 
 export const Footer = () => {
+  const { data: dbCategories } = useCategories();
+  
+  const categories = dbCategories && dbCategories.length > 0
+    ? dbCategories.map(cat => ({
+        name: cat.name,
+        slug: cat.slug,
+      }))
+    : staticCategories;
+
   return (
     <footer className="border-t border-border bg-card mt-16">
       <div className="container py-12">
