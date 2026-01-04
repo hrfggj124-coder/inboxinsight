@@ -4,12 +4,16 @@ import { ArticleCard } from "@/components/articles/ArticleCard";
 import { TrendingSidebar } from "@/components/articles/TrendingSidebar";
 import { AdSlot } from "@/components/ads/AdSlot";
 import { useArticles, useCategories } from "@/hooks/useArticles";
+import { useRealtimeArticles } from "@/hooks/useRealtimeArticles";
 import { articles as staticArticles, getFeaturedArticles, categories as staticCategories } from "@/data/articles";
 import { Link } from "react-router-dom";
 import { ArrowRight, Zap } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const Index = () => {
+  // Enable realtime updates for articles
+  useRealtimeArticles();
+  
   // Fetch from database
   const { data: dbArticles, isLoading: articlesLoading } = useArticles({ 
     status: 'published', 

@@ -69,6 +69,13 @@ export const Header = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile" className="flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      My Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   {isPublisher && (
                     <DropdownMenuItem asChild>
                       <Link to="/publisher" className="flex items-center gap-2">
@@ -207,6 +214,9 @@ export const Header = () => {
               {user && (
                 <>
                   <div className="border-t border-border my-2" />
+                  <Link to="/profile" className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground flex items-center gap-2" onClick={() => setIsMenuOpen(false)}>
+                    <User className="h-4 w-4" /> My Profile
+                  </Link>
                   <button 
                     onClick={() => { handleSignOut(); setIsMenuOpen(false); }}
                     className="px-3 py-2 text-sm text-destructive text-left"

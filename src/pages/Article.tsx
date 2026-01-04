@@ -7,6 +7,8 @@ import { AdSlot } from "@/components/ads/AdSlot";
 import { LikeButton } from "@/components/articles/LikeButton";
 import { CommentSection } from "@/components/articles/CommentSection";
 import { ShareButtons } from "@/components/articles/ShareButtons";
+import { HTMLContent } from "@/components/articles/HTMLContent";
+import { HTMLSnippetRenderer } from "@/hooks/useHTMLSnippets";
 import { useArticle } from "@/hooks/useArticles";
 import { useRealtimeComments } from "@/hooks/useRealtimeComments";
 import { useRealtimeLikes } from "@/hooks/useRealtimeLikes";
@@ -205,14 +207,14 @@ const Article = () => {
               />
             </div>
 
-            {/* Article Body */}
-            <div className="prose prose-lg prose-invert max-w-none">
-              {articleData.content.split("\n\n").map((paragraph, index) => (
-                <p key={index} className="text-foreground/90 leading-relaxed mb-6">
-                  {paragraph}
-                </p>
-              ))}
-            </div>
+            {/* Custom HTML Snippet - Article Top */}
+            <HTMLSnippetRenderer location="article_top" className="my-4" />
+
+            {/* Article Body - Supports HTML content */}
+            <HTMLContent content={articleData.content} />
+
+            {/* Custom HTML Snippet - Article Bottom */}
+            <HTMLSnippetRenderer location="article_bottom" className="my-4" />
 
             {/* Inline Ad */}
             <div className="my-8">

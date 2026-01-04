@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -14,7 +15,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AIToolsPanel } from "@/components/publisher/AIToolsPanel";
-import { Save, Send, ArrowLeft, Loader2 } from "lucide-react";
+import { ImageUpload } from "@/components/shared/ImageUpload";
+import { HTMLContent } from "@/components/articles/HTMLContent";
+import { Save, Send, ArrowLeft, Loader2, Eye, Code } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 interface ArticleEditorProps {
@@ -247,15 +250,39 @@ export const ArticleEditor = ({ articleId, onClose }: ArticleEditorProps) => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="content">Content</Label>
-            <Textarea
-              id="content"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Write your article content here..."
-              rows={15}
-              className="min-h-[400px] font-mono text-sm"
-            />
+            <Label>Content (supports HTML)</Label>
+            <Tabs defaultValue="edit" className="w-full">
+              <TabsList className="mb-2">
+                <TabsTrigger value="edit" className="gap-2">
+                  <Code className="h-4 w-4" /> Edit
+                </TabsTrigger>
+                <TabsTrigger value="preview" className="gap-2">
+                  <Eye className="h-4 w-4" /> Preview
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="edit" className="mt-0">
+                <Textarea
+                  id="content"
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Write your article content here... You can use HTML tags for formatting."
+                  rows={15}
+                  className="min-h-[400px] font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  Supports HTML: &lt;h2&gt;, &lt;p&gt;, &lt;strong&gt;, &lt;em&gt;, &lt;ul&gt;, &lt;ol&gt;, &lt;blockquote&gt;, &lt;a&gt;, &lt;img&gt;, and more.
+                </p>
+              </TabsContent>
+              <TabsContent value="preview" className="mt-0">
+                <div className="min-h-[400px] border border-border rounded-md p-4 bg-background overflow-auto">
+                  {content ? (
+                    <HTMLContent content={content} />
+                  ) : (
+                    <p className="text-muted-foreground italic">No content to preview</p>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-4">
@@ -275,15 +302,11 @@ export const ArticleEditor = ({ articleId, onClose }: ArticleEditorProps) => {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="coverImage">Cover Image URL</Label>
-              <Input
-                id="coverImage"
-                value={coverImage}
-                onChange={(e) => setCoverImage(e.target.value)}
-                placeholder="https://..."
-              />
-            </div>
+            <ImageUpload
+              value={coverImage}
+              onChange={setCoverImage}
+              label="Cover Image"
+            />
           </div>
 
           {/* SEO Section */}
