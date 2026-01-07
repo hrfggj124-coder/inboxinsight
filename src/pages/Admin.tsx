@@ -14,11 +14,15 @@ import { CategoryManagement } from "@/components/admin/CategoryManagement";
 import { ArticleManagement } from "@/components/admin/ArticleManagement";
 import { SettingsPanel } from "@/components/admin/SettingsPanel";
 import { AnalyticsDashboard } from "@/components/admin/AnalyticsDashboard";
+import { useRealtimeAdmin } from "@/hooks/useRealtimeAdmin";
 const Admin = () => {
   const { user, loading, isAdmin } = useAuth();
   const navigate = useNavigate();
   // Track if authorization check is complete to prevent UI flash
   const [authCheckComplete, setAuthCheckComplete] = useState(false);
+  
+  // Enable realtime updates for admin data
+  useRealtimeAdmin();
 
   useEffect(() => {
     if (!loading) {

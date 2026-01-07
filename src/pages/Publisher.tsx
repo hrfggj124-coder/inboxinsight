@@ -8,6 +8,7 @@ import { ArticleList } from "@/components/publisher/ArticleList";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, PenSquare, BarChart3, ShieldAlert } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRealtimePublisher } from "@/hooks/useRealtimePublisher";
 
 const Publisher = () => {
   const { user, loading, isPublisher } = useAuth();
@@ -16,6 +17,9 @@ const Publisher = () => {
   const [editingArticleId, setEditingArticleId] = useState<string | null>(null);
   // Track if authorization check is complete to prevent UI flash
   const [authCheckComplete, setAuthCheckComplete] = useState(false);
+  
+  // Enable realtime updates for publisher data
+  useRealtimePublisher();
 
   useEffect(() => {
     if (!loading) {
