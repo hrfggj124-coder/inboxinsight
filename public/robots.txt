@@ -1,4 +1,10 @@
+# TechPulse Robots.txt
+# https://www.robotstxt.org/robotstxt.html
+
 User-agent: Googlebot
+Allow: /
+
+User-agent: Googlebot-News
 Allow: /
 
 User-agent: Bingbot
@@ -12,3 +18,13 @@ Allow: /
 
 User-agent: *
 Allow: /
+
+# Sitemap location
+Sitemap: https://techpulse.com/sitemap.xml
+
+# Disallow admin and auth pages from all crawlers
+User-agent: *
+Disallow: /admin
+Disallow: /publisher
+Disallow: /auth
+Disallow: /profile
