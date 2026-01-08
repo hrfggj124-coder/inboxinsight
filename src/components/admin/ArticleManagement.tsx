@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -38,7 +39,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { 
   Plus, Pencil, Trash2, MoreHorizontal, Search, Eye, 
-  FileText, Clock, CheckCircle, XCircle 
+  FileText, Clock, CheckCircle, XCircle, CheckSquare, X
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
@@ -75,7 +76,9 @@ export const ArticleManagement = () => {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [selectedArticle, setSelectedArticle] = useState<any>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [formData, setFormData] = useState<ArticleFormData>({
     title: '',
     slug: '',
@@ -188,6 +191,58 @@ export const ArticleManagement = () => {
     },
   });
 
+  // Bulk status update mutation
+  const bulkStatusMutation = useMutation({
+    mutationFn: async ({ ids, status }: { ids: string[]; status: ArticleStatus }) => {
+      const updateData: any = { status };
+      if (status === 'published') {
+        updateData.published_at = new Date().toISOString();
+      }
+      const { error } = await supabase
+        .from('articles')
+        .update(updateData)
+        .in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: (_, { status }) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-all-articles'] });
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+      const statusLabel = status === 'published' ? 'approved' : status;
+      toast({ 
+        title: `Articles ${statusLabel}`, 
+        description: `${selectedIds.size} article(s) have been ${statusLabel}.` 
+      });
+      setSelectedIds(new Set());
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from('articles')
+        .delete()
+        .in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-all-articles'] });
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+      toast({ 
+        title: "Articles deleted", 
+        description: `${selectedIds.size} article(s) have been removed.` 
+      });
+      setSelectedIds(new Set());
+      setBulkDeleteDialogOpen(false);
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const closeDialog = () => {
     setDialogOpen(false);
     setSelectedArticle(null);
@@ -252,6 +307,36 @@ export const ArticleManagement = () => {
     article.author_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredArticles?.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredArticles?.map(a => a.id) || []));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const handleBulkApprove = () => {
+    bulkStatusMutation.mutate({ ids: Array.from(selectedIds), status: 'published' });
+  };
+
+  const handleBulkReject = () => {
+    bulkStatusMutation.mutate({ ids: Array.from(selectedIds), status: 'rejected' });
+  };
+
+  const handleBulkDelete = () => {
+    bulkDeleteMutation.mutate(Array.from(selectedIds));
+  };
+
   const getStatusBadge = (status: string) => {
     const configs: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; icon: any }> = {
       draft: { variant: "secondary", icon: FileText },
@@ -310,11 +395,66 @@ export const ArticleManagement = () => {
         </Button>
       </div>
 
+      {/* Bulk Actions Bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg border border-border">
+          <div className="flex items-center gap-2">
+            <CheckSquare className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium">{selectedIds.size} selected</span>
+          </div>
+          <div className="flex-1" />
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkApprove}
+              disabled={bulkStatusMutation.isPending}
+              className="text-green-600 border-green-600 hover:bg-green-50"
+            >
+              <CheckCircle className="h-4 w-4 mr-1" />
+              Approve
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkReject}
+              disabled={bulkStatusMutation.isPending}
+              className="text-orange-600 border-orange-600 hover:bg-orange-50"
+            >
+              <XCircle className="h-4 w-4 mr-1" />
+              Reject
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setBulkDeleteDialogOpen(true)}
+              disabled={bulkDeleteMutation.isPending}
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       {filteredArticles && filteredArticles.length > 0 ? (
         <div className="bg-card rounded-xl border border-border overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/30">
+                <TableHead className="w-[50px]">
+                  <Checkbox
+                    checked={selectedIds.size === filteredArticles.length && filteredArticles.length > 0}
+                    onCheckedChange={toggleSelectAll}
+                  />
+                </TableHead>
                 <TableHead>Title</TableHead>
                 <TableHead>Author</TableHead>
                 <TableHead>Category</TableHead>
@@ -326,7 +466,16 @@ export const ArticleManagement = () => {
             </TableHeader>
             <TableBody>
               {filteredArticles.map((article) => (
-                <TableRow key={article.id} className="hover:bg-muted/20">
+                <TableRow 
+                  key={article.id} 
+                  className={`hover:bg-muted/20 ${selectedIds.has(article.id) ? 'bg-muted/30' : ''}`}
+                >
+                  <TableCell>
+                    <Checkbox
+                      checked={selectedIds.has(article.id)}
+                      onCheckedChange={() => toggleSelect(article.id)}
+                    />
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <span className="font-medium line-clamp-1 max-w-[200px]">{article.title}</span>
@@ -546,6 +695,28 @@ export const ArticleManagement = () => {
               disabled={deleteMutation.isPending}
             >
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Dialog */}
+      <Dialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {selectedIds.size} Articles</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedIds.size} article(s)? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkDeleteDialogOpen(false)}>Cancel</Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleBulkDelete}
+              disabled={bulkDeleteMutation.isPending}
+            >
+              Delete {selectedIds.size} Article(s)
             </Button>
           </DialogFooter>
         </DialogContent>

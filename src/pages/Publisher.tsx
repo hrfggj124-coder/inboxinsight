@@ -5,10 +5,12 @@ import { SEOHead } from "@/components/seo/SEOHead";
 import { useAuth } from "@/contexts/AuthContext";
 import { ArticleEditor } from "@/components/publisher/ArticleEditor";
 import { ArticleList } from "@/components/publisher/ArticleList";
+import { PublisherStats } from "@/components/publisher/PublisherStats";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, PenSquare, BarChart3, ShieldAlert } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRealtimePublisher } from "@/hooks/useRealtimePublisher";
+import { usePublisherNotifications } from "@/hooks/usePublisherNotifications";
 
 const Publisher = () => {
   const { user, loading, isPublisher } = useAuth();
@@ -20,6 +22,9 @@ const Publisher = () => {
   
   // Enable realtime updates for publisher data
   useRealtimePublisher();
+  
+  // Enable real-time notifications for article status changes
+  usePublisherNotifications();
 
   useEffect(() => {
     if (!loading) {
@@ -137,13 +142,7 @@ const Publisher = () => {
           </TabsContent>
 
           <TabsContent value="stats" className="mt-6">
-            <div className="bg-card rounded-xl border border-border p-8 text-center">
-              <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="font-display text-xl font-semibold mb-2">Statistics Coming Soon</h3>
-              <p className="text-muted-foreground">
-                Track your article views, likes, and engagement metrics.
-              </p>
-            </div>
+            <PublisherStats />
           </TabsContent>
         </Tabs>
       </div>
