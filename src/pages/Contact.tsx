@@ -3,8 +3,45 @@ import { SEOHead } from "@/components/seo/SEOHead";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Mail, MapPin, Phone, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Helmet } from "react-helmet-async";
+
+const contactFaqs = [
+  {
+    question: "How can I contact TechPulse?",
+    answer: "You can reach us via email at contact@techpulse.com, by phone at +1 (555) 123-4567, or by using the contact form on this page. We're based in San Francisco, CA."
+  },
+  {
+    question: "How do I submit a news tip to TechPulse?",
+    answer: "You can submit a news tip by using our contact form and selecting 'Submit a News Tip' as the subject. We review all tips and may follow up for more information."
+  },
+  {
+    question: "How can I advertise on TechPulse?",
+    answer: "For advertising and sponsorship opportunities, please contact our advertising team at ads@techpulse.com. We offer various advertising formats including display ads, sponsored content, and newsletter sponsorships."
+  },
+  {
+    question: "How do I contact TechPulse for press inquiries?",
+    answer: "For press and media inquiries, please email press@techpulse.com. Our communications team typically responds within 24-48 business hours."
+  },
+  {
+    question: "Does TechPulse accept guest posts or partnerships?",
+    answer: "Yes, we're open to partnerships and collaborations. Please use our contact form and select 'Partnerships' as the subject to discuss potential opportunities with our team."
+  }
+];
 
 const Contact = () => {
+  const faqSchema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: contactFaqs.map((faq) => ({
+      "@type": "Question",
+      name: faq.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: faq.answer,
+      },
+    })),
+  };
+
   return (
     <Layout>
       <SEOHead
@@ -12,6 +49,11 @@ const Contact = () => {
         description="Get in touch with the TechPulse team. Contact us for press inquiries, partnerships, advertising, or general questions."
         canonical="/contact"
       />
+      <Helmet>
+        <script type="application/ld+json">
+          {JSON.stringify(faqSchema)}
+        </script>
+      </Helmet>
 
       <div className="container py-8">
         <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-6">

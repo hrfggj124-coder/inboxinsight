@@ -2,8 +2,45 @@ import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Users, Globe, Award, Target } from "lucide-react";
+import { Helmet } from "react-helmet-async";
+
+const aboutFaqs = [
+  {
+    question: "What is TechPulse?",
+    answer: "TechPulse is a leading technology news platform that delivers accurate, insightful, and timely coverage of the tech industry, including AI, cybersecurity, startups, software development, and consumer electronics."
+  },
+  {
+    question: "Who writes for TechPulse?",
+    answer: "Our team consists of experienced journalists and analysts with decades of combined experience covering technology, finance, and innovation from Silicon Valley and around the world."
+  },
+  {
+    question: "What topics does TechPulse cover?",
+    answer: "We cover all major technology sectors including Artificial Intelligence, Machine Learning, Software Development, Startups, Venture Capital, Cybersecurity, Cloud Computing, Consumer Electronics, Web3, Blockchain, Fintech, and Tech Policy."
+  },
+  {
+    question: "Is TechPulse free to read?",
+    answer: "Yes, TechPulse is committed to providing free, accessible technology news to readers worldwide. Our editorial team maintains complete independence from advertisers."
+  },
+  {
+    question: "How can I subscribe to TechPulse?",
+    answer: "You can subscribe to our newsletter by entering your email address in the subscription form on our website. You'll receive daily tech news and insights delivered directly to your inbox."
+  }
+];
 
 const About = () => {
+  const faqSchema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: aboutFaqs.map((faq) => ({
+      "@type": "Question",
+      name: faq.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: faq.answer,
+      },
+    })),
+  };
+
   return (
     <Layout>
       <SEOHead
@@ -11,6 +48,11 @@ const About = () => {
         description="TechPulse is your trusted source for the latest technology news, analysis, and insights. Learn about our mission, team, and commitment to quality tech journalism."
         canonical="/about"
       />
+      <Helmet>
+        <script type="application/ld+json">
+          {JSON.stringify(faqSchema)}
+        </script>
+      </Helmet>
 
       <div className="container py-8">
         <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
