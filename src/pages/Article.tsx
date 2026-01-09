@@ -122,8 +122,11 @@ const Article = () => {
         type="article"
         image={articleData.image}
         publishedTime={articleData.publishedAt}
+        modifiedTime={isDbArticle ? dbArticle.updated_at : undefined}
         author={articleData.author}
         tags={articleData.tags}
+        section={articleData.category}
+        wordCount={articleData.content.split(/\s+/).length}
       />
 
       {/* Header Ad */}
