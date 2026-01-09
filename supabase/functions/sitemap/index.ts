@@ -16,89 +16,131 @@ Deno.serve(async (req) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-    // Get base URL from request or use default
     const url = new URL(req.url);
     const baseUrl = url.searchParams.get('baseUrl') || 'https://techpulse.com';
+    const type = url.searchParams.get('type') || 'index';
+    const month = url.searchParams.get('month'); // Format: YYYY-MM
 
-    // Fetch all published articles
-    const { data: articles, error: articlesError } = await supabase
-      .from('articles')
-      .select('slug, title, published_at, updated_at, cover_image')
-      .eq('status', 'published')
-      .order('published_at', { ascending: false });
-
-    if (articlesError) {
-      console.error('Error fetching articles:', articlesError);
-      throw articlesError;
+    // Generate sitemap index
+    if (type === 'index') {
+      return await generateSitemapIndex(supabase, baseUrl, url.origin);
     }
 
-    // Fetch all categories
-    const { data: categories, error: categoriesError } = await supabase
-      .from('categories')
-      .select('slug, name');
-
-    if (categoriesError) {
-      console.error('Error fetching categories:', categoriesError);
-      throw categoriesError;
+    // Generate monthly news sitemap
+    if (type === 'news' && month) {
+      return await generateNewsSitemap(supabase, baseUrl, month);
     }
 
-    const now = new Date().toISOString();
+    // Generate static pages sitemap
+    if (type === 'static') {
+      return generateStaticSitemap(baseUrl);
+    }
 
-    // Build sitemap XML
-    let sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+    // Generate categories sitemap
+    if (type === 'categories') {
+      return await generateCategoriesSitemap(supabase, baseUrl);
+    }
+
+    // Default: return index
+    return await generateSitemapIndex(supabase, baseUrl, url.origin);
+  } catch (error) {
+    console.error('Sitemap generation error:', error);
+    return new Response(
+      `<?xml version="1.0" encoding="UTF-8"?><error>Failed to generate sitemap</error>`,
+      { status: 500, headers: corsHeaders }
+    );
+  }
+});
+
+async function generateSitemapIndex(supabase: any, baseUrl: string, functionUrl: string) {
+  // Get distinct months from published articles
+  const { data: articles, error } = await supabase
+    .from('articles')
+    .select('published_at')
+    .eq('status', 'published')
+    .not('published_at', 'is', null)
+    .order('published_at', { ascending: false });
+
+  if (error) throw error;
+
+  // Extract unique months
+  const months = new Set<string>();
+  articles?.forEach((article: { published_at: string }) => {
+    if (article.published_at) {
+      const date = new Date(article.published_at);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      months.add(monthKey);
+    }
+  });
+
+  const now = new Date().toISOString();
+  const sitemapBaseUrl = functionUrl + '/sitemap';
+
+  let sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  
+  <!-- Static Pages Sitemap -->
+  <sitemap>
+    <loc>${sitemapBaseUrl}?type=static&amp;baseUrl=${encodeURIComponent(baseUrl)}</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+  
+  <!-- Categories Sitemap -->
+  <sitemap>
+    <loc>${sitemapBaseUrl}?type=categories&amp;baseUrl=${encodeURIComponent(baseUrl)}</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>
+`;
+
+  // Add monthly news sitemaps
+  for (const month of Array.from(months).sort().reverse()) {
+    const [year, m] = month.split('-');
+    const lastDay = new Date(parseInt(year), parseInt(m), 0).getDate();
+    const lastmod = `${year}-${m}-${String(lastDay).padStart(2, '0')}T23:59:59Z`;
+    
+    sitemap += `
+  <!-- News Sitemap: ${month} -->
+  <sitemap>
+    <loc>${sitemapBaseUrl}?type=news&amp;month=${month}&amp;baseUrl=${encodeURIComponent(baseUrl)}</loc>
+    <lastmod>${lastmod}</lastmod>
+  </sitemap>`;
+  }
+
+  sitemap += `
+</sitemapindex>`;
+
+  return new Response(sitemap, { headers: corsHeaders });
+}
+
+async function generateNewsSitemap(supabase: any, baseUrl: string, month: string) {
+  const [year, m] = month.split('-');
+  const startDate = `${year}-${m}-01T00:00:00Z`;
+  const endDate = new Date(parseInt(year), parseInt(m), 0, 23, 59, 59).toISOString();
+
+  const { data: articles, error } = await supabase
+    .from('articles')
+    .select('slug, title, published_at, updated_at, cover_image')
+    .eq('status', 'published')
+    .gte('published_at', startDate)
+    .lte('published_at', endDate)
+    .order('published_at', { ascending: false });
+
+  if (error) throw error;
+
+  let sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
-  
-  <!-- Homepage -->
-  <url>
-    <loc>${baseUrl}/</loc>
-    <lastmod>${now}</lastmod>
-    <changefreq>hourly</changefreq>
-    <priority>1.0</priority>
-  </url>
-  
-  <!-- Categories Page -->
-  <url>
-    <loc>${baseUrl}/categories</loc>
-    <lastmod>${now}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.9</priority>
-  </url>
-  
-  <!-- Search Page -->
-  <url>
-    <loc>${baseUrl}/search</loc>
-    <lastmod>${now}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.7</priority>
-  </url>
 `;
 
-    // Add category pages
-    if (categories) {
-      for (const category of categories) {
-        sitemap += `
-  <url>
-    <loc>${baseUrl}/category/${category.slug}</loc>
-    <lastmod>${now}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.8</priority>
-  </url>`;
-      }
-    }
+  if (articles) {
+    for (const article of articles) {
+      const pubDate = new Date(article.published_at).toISOString();
+      const modDate = article.updated_at 
+        ? new Date(article.updated_at).toISOString() 
+        : pubDate;
 
-    // Add article pages with Google News tags
-    if (articles) {
-      for (const article of articles) {
-        const pubDate = article.published_at 
-          ? new Date(article.published_at).toISOString() 
-          : now;
-        const modDate = article.updated_at 
-          ? new Date(article.updated_at).toISOString() 
-          : pubDate;
-
-        sitemap += `
+      sitemap += `
   <url>
     <loc>${baseUrl}/article/${article.slug}</loc>
     <lastmod>${modDate}</lastmod>
@@ -113,24 +155,83 @@ Deno.serve(async (req) => {
       <news:title>${escapeXml(article.title)}</news:title>
     </news:news>`;
 
-        // Add image if available
-        if (article.cover_image) {
-          sitemap += `
+      if (article.cover_image) {
+        sitemap += `
     <image:image>
       <image:loc>${escapeXml(article.cover_image)}</image:loc>
       <image:title>${escapeXml(article.title)}</image:title>
     </image:image>`;
-        }
-
-        sitemap += `
-  </url>`;
       }
-    }
 
-    // Add static pages
-    sitemap += `
+      sitemap += `
+  </url>`;
+    }
+  }
+
+  sitemap += `
+</urlset>`;
+
+  return new Response(sitemap, { headers: corsHeaders });
+}
+
+async function generateCategoriesSitemap(supabase: any, baseUrl: string) {
+  const { data: categories, error } = await supabase
+    .from('categories')
+    .select('slug, name');
+
+  if (error) throw error;
+
+  const now = new Date().toISOString();
+
+  let sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
-  <!-- Static Pages -->
+  <url>
+    <loc>${baseUrl}/categories</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+`;
+
+  if (categories) {
+    for (const category of categories) {
+      sitemap += `
+  <url>
+    <loc>${baseUrl}/category/${category.slug}</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>`;
+    }
+  }
+
+  sitemap += `
+</urlset>`;
+
+  return new Response(sitemap, { headers: corsHeaders });
+}
+
+function generateStaticSitemap(baseUrl: string) {
+  const now = new Date().toISOString();
+
+  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  
+  <url>
+    <loc>${baseUrl}/</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  
+  <url>
+    <loc>${baseUrl}/search</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  
   <url>
     <loc>${baseUrl}/about</loc>
     <changefreq>monthly</changefreq>
@@ -163,15 +264,8 @@ Deno.serve(async (req) => {
 
 </urlset>`;
 
-    return new Response(sitemap, { headers: corsHeaders });
-  } catch (error) {
-    console.error('Sitemap generation error:', error);
-    return new Response(
-      `<?xml version="1.0" encoding="UTF-8"?><error>Failed to generate sitemap</error>`,
-      { status: 500, headers: corsHeaders }
-    );
-  }
-});
+  return new Response(sitemap, { headers: corsHeaders });
+}
 
 function escapeXml(text: string): string {
   return text
