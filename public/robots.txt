@@ -1,6 +1,9 @@
 # TechPulse Robots.txt
 # https://www.robotstxt.org/robotstxt.html
 
+# Dynamic sitemap (includes all published articles)
+Sitemap: https://qtmilufnjmwlfgxmwzdm.supabase.co/functions/v1/sitemap
+
 User-agent: Googlebot
 Allow: /
 
