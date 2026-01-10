@@ -25,6 +25,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Validate notification type to prevent injection
+const validNotificationTypes = ["article_approved", "article_rejected", "new_comment"] as const;
+type ValidNotificationType = typeof validNotificationTypes[number];
+
+const isValidNotificationType = (type: string): type is ValidNotificationType => {
+  return validNotificationTypes.includes(type as ValidNotificationType);
+};
+
 interface NotificationRequest {
   type: "article_approved" | "article_rejected" | "new_comment";
   recipient_user_id: string;
@@ -40,6 +48,59 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    // 1. Verify authentication - require Authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error("Missing Authorization header");
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Authentication required' }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // 2. Create client with user's auth context to verify their identity
+    const userSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    // 3. Verify user is authenticated
+    const { data: { user }, error: authError } = await userSupabase.auth.getUser();
+    if (authError || !user) {
+      console.error("Invalid authentication:", authError?.message);
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication' }),
+        { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // 4. Check if user has admin role - only admins can send notifications
+    const { data: roles, error: rolesError } = await userSupabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id);
+
+    if (rolesError) {
+      console.error("Error checking user roles:", rolesError.message);
+      return new Response(
+        JSON.stringify({ error: 'Failed to verify permissions' }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    const isAdmin = roles?.some(r => r.role === 'admin');
+    if (!isAdmin) {
+      console.error("User is not an admin:", user.id);
+      return new Response(
+        JSON.stringify({ error: 'Forbidden - Admin role required' }),
+        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // 5. Now proceed with the notification logic using service role key
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
     
     // If no Resend API key, log and return success (notifications are optional)
@@ -50,14 +111,33 @@ const handler = async (req: Request): Promise<Response> => {
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Create admin client for privileged operations
+    const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { type, recipient_user_id, article_id, article_title, comment_content, commenter_name }: NotificationRequest = await req.json();
 
+    // 6. Validate notification type to prevent injection
+    if (!isValidNotificationType(type)) {
+      console.error("Invalid notification type:", type);
+      return new Response(
+        JSON.stringify({ error: 'Invalid notification type' }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // 7. Validate recipient_user_id format (UUID)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!recipient_user_id || !uuidRegex.test(recipient_user_id)) {
+      console.error("Invalid recipient_user_id:", recipient_user_id);
+      return new Response(
+        JSON.stringify({ error: 'Invalid recipient user ID' }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     // Get recipient's email and notification preferences
-    const { data: userData, error: userError } = await supabase.auth.admin.getUserById(recipient_user_id);
+    const { data: userData, error: userError } = await adminSupabase.auth.admin.getUserById(recipient_user_id);
     
     if (userError || !userData?.user?.email) {
       console.error("Failed to get user email:", userError);
@@ -70,7 +150,7 @@ const handler = async (req: Request): Promise<Response> => {
     const recipientEmail = userData.user.email;
 
     // Check notification preferences
-    const { data: settings } = await supabase
+    const { data: settings } = await adminSupabase
       .from("notification_settings")
       .select("*")
       .eq("user_id", recipient_user_id)
@@ -161,7 +241,7 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Email sent successfully:", emailResponse);
 
     // Log notification to queue
-    await supabase.from("notification_queue").insert({
+    await adminSupabase.from("notification_queue").insert({
       recipient_user_id,
       notification_type: type,
       subject,
