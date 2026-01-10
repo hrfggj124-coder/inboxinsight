@@ -19,6 +19,7 @@ import Publisher from "./pages/Publisher";
 import Admin from "./pages/Admin";
 import Search from "./pages/Search";
 import Profile from "./pages/Profile";
+import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,6 +38,7 @@ const App = () => (
               <Route path="/publisher" element={<Publisher />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/notifications" element={<Notifications />} />
               <Route path="/article/:slug" element={<Article />} />
               <Route path="/search" element={<Search />} />
               <Route path="/category/:slug" element={<Category />} />
