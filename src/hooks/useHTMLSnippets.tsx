@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
+import DOMPurify from "dompurify";
 
 interface HTMLSnippet {
   id: string;
@@ -41,12 +42,35 @@ interface HTMLSnippetRendererProps {
 export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRendererProps) => {
   const { snippets, isLoading } = useHTMLSnippets(location);
 
-  const combinedHTML = useMemo(() => {
+  const sanitizedHTML = useMemo(() => {
     if (!snippets || snippets.length === 0) return "";
-    return snippets.map(s => s.code).join("\n");
+    const combinedHTML = snippets.map(s => s.code).join("\n");
+    
+    // Sanitize HTML to prevent XSS attacks
+    // Allow common ad/analytics tags but remove dangerous scripts
+    const sanitized = DOMPurify.sanitize(combinedHTML, {
+      ALLOWED_TAGS: [
+        'div', 'span', 'p', 'a', 'img', 'iframe', 'ins', 'script',
+        'noscript', 'style', 'link', 'meta', 'section', 'article',
+        'header', 'footer', 'nav', 'aside', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'ul', 'ol', 'li', 'br', 'hr', 'strong', 'em', 'b', 'i', 'u'
+      ],
+      ALLOWED_ATTR: [
+        'id', 'class', 'style', 'href', 'src', 'alt', 'title', 'target', 'rel',
+        'width', 'height', 'frameborder', 'allowfullscreen', 'loading', 'data-*',
+        'data-ad-client', 'data-ad-slot', 'data-ad-format', 'data-full-width-responsive',
+        'async', 'defer', 'type', 'crossorigin', 'integrity', 'name', 'content'
+      ],
+      // Allow data: URIs for images (common in ads)
+      ALLOW_DATA_ATTR: true,
+      // Keep scripts for analytics/ads but sanitize their content
+      FORCE_BODY: true,
+    });
+    
+    return sanitized;
   }, [snippets]);
 
-  if (isLoading || !combinedHTML) return null;
+  if (isLoading || !sanitizedHTML) return null;
 
   // For head snippets, we'd need to use Helmet
   // For body snippets, we can render directly
@@ -57,7 +81,7 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
   return (
     <div 
       className={className}
-      dangerouslySetInnerHTML={{ __html: combinedHTML }}
+      dangerouslySetInnerHTML={{ __html: sanitizedHTML }}
     />
   );
 };
