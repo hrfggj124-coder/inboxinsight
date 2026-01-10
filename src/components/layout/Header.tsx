@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Menu, X, Search, TrendingUp, PenSquare, LogOut, User, Settings } from "lucide-react";
+import { Menu, X, Search, TrendingUp, PenSquare, LogOut, User, Settings, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCategories } from "@/hooks/useArticles";
 import { categories as staticCategories } from "@/data/articles";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUnreadNotificationsCount } from "@/hooks/useNotifications";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +23,9 @@ export const Header = () => {
   
   // Fetch categories from database
   const { data: dbCategories } = useCategories();
+  
+  // Fetch unread notifications count
+  const { data: unreadCount } = useUnreadNotificationsCount(user?.id);
   
   const categories = dbCategories && dbCategories.length > 0
     ? dbCategories.map(cat => ({
@@ -69,6 +73,17 @@ export const Header = () => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem asChild>
+                    <Link to="/notifications" className="flex items-center gap-2">
+                      <Bell className="h-4 w-4" />
+                      Notifications
+                      {unreadCount && unreadCount > 0 && (
+                        <span className="ml-auto bg-primary text-primary-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                      )}
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/profile" className="flex items-center gap-2">
                       <User className="h-4 w-4" />
@@ -214,6 +229,15 @@ export const Header = () => {
               {user && (
                 <>
                   <div className="border-t border-border my-2" />
+                  <Link to="/notifications" className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground flex items-center gap-2" onClick={() => setIsMenuOpen(false)}>
+                    <Bell className="h-4 w-4" /> 
+                    Notifications
+                    {unreadCount && unreadCount > 0 && (
+                      <span className="ml-auto bg-primary text-primary-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    )}
+                  </Link>
                   <Link to="/profile" className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground flex items-center gap-2" onClick={() => setIsMenuOpen(false)}>
                     <User className="h-4 w-4" /> My Profile
                   </Link>
