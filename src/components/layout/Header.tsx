@@ -6,6 +6,7 @@ import { useCategories } from "@/hooks/useArticles";
 import { categories as staticCategories } from "@/data/articles";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUnreadNotificationsCount } from "@/hooks/useNotifications";
+import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +27,9 @@ export const Header = () => {
   
   // Fetch unread notifications count
   const { data: unreadCount } = useUnreadNotificationsCount(user?.id);
+  
+  // Subscribe to real-time notification updates
+  useRealtimeNotifications(user?.id);
   
   const categories = dbCategories && dbCategories.length > 0
     ? dbCategories.map(cat => ({
