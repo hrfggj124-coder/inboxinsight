@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import DOMPurify from "dompurify";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import { Layout } from "@/components/layout/Layout";
@@ -41,6 +42,16 @@ const NotificationStatusBadge = ({ status }: { status: string | null }) => {
 const NotificationCard = ({ notification }: { notification: ReturnType<typeof useNotifications>["data"] extends (infer T)[] ? T : never }) => {
   const createdAt = notification.created_at ? new Date(notification.created_at) : null;
   
+  // Sanitize notification body to prevent XSS attacks
+  const sanitizedBody = useMemo(() => {
+    return DOMPurify.sanitize(notification.body, {
+      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'a', 'ul', 'ol', 'li', 'span'],
+      ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
+      FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input'],
+      FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur'],
+    });
+  }, [notification.body]);
+  
   return (
     <Card className="transition-all hover:shadow-md">
       <CardHeader className="pb-2">
@@ -63,7 +74,7 @@ const NotificationCard = ({ notification }: { notification: ReturnType<typeof us
       <CardContent>
         <div 
           className="text-sm text-muted-foreground prose prose-sm max-w-none"
-          dangerouslySetInnerHTML={{ __html: notification.body }}
+          dangerouslySetInnerHTML={{ __html: sanitizedBody }}
         />
         {createdAt && (
           <p className="text-xs text-muted-foreground mt-3">
