@@ -2,14 +2,34 @@ import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import DOMPurify from "dompurify";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNotifications } from "@/hooks/useNotifications";
+import { 
+  useNotifications, 
+  useMarkNotificationAsRead, 
+  useMarkAllNotificationsAsRead,
+  useDeleteNotification,
+  useDeleteAllNotifications,
+  Notification
+} from "@/hooks/useNotifications";
 import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Bell, CheckCircle, Clock, Mail, MessageSquare, ThumbsUp, XCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Bell, CheckCircle, Clock, Mail, MessageSquare, ThumbsUp, XCircle, Check, Trash2, CheckCheck } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
+import { cn } from "@/lib/utils";
 
 const NotificationIcon = ({ type }: { type: string }) => {
   switch (type) {
@@ -39,8 +59,23 @@ const NotificationStatusBadge = ({ status }: { status: string | null }) => {
   }
 };
 
-const NotificationCard = ({ notification }: { notification: ReturnType<typeof useNotifications>["data"] extends (infer T)[] ? T : never }) => {
+interface NotificationCardProps {
+  notification: Notification;
+  onMarkAsRead: (id: string) => void;
+  onDelete: (id: string) => void;
+  isMarkingAsRead: boolean;
+  isDeleting: boolean;
+}
+
+const NotificationCard = ({ 
+  notification, 
+  onMarkAsRead, 
+  onDelete,
+  isMarkingAsRead,
+  isDeleting
+}: NotificationCardProps) => {
   const createdAt = notification.created_at ? new Date(notification.created_at) : null;
+  const isRead = !!notification.read_at;
   
   // Sanitize notification body to prevent XSS attacks
   const sanitizedBody = useMemo(() => {
@@ -53,22 +88,35 @@ const NotificationCard = ({ notification }: { notification: ReturnType<typeof us
   }, [notification.body]);
   
   return (
-    <Card className="transition-all hover:shadow-md">
+    <Card className={cn(
+      "transition-all hover:shadow-md",
+      !isRead && "border-l-4 border-l-primary bg-primary/5"
+    )}>
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-full bg-muted p-2">
+            <div className={cn(
+              "rounded-full p-2",
+              isRead ? "bg-muted" : "bg-primary/10"
+            )}>
               <NotificationIcon type={notification.notification_type} />
             </div>
             <div>
-              <CardTitle className="text-base">{notification.subject}</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                {notification.subject}
+                {!isRead && (
+                  <Badge variant="default" className="text-xs">New</Badge>
+                )}
+              </CardTitle>
               <CardDescription className="flex items-center gap-2 mt-1">
                 <Clock className="h-3 w-3" />
                 {createdAt ? formatDistanceToNow(createdAt, { addSuffix: true }) : "Unknown time"}
               </CardDescription>
             </div>
           </div>
-          <NotificationStatusBadge status={notification.status} />
+          <div className="flex items-center gap-2">
+            <NotificationStatusBadge status={notification.status} />
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -76,11 +124,57 @@ const NotificationCard = ({ notification }: { notification: ReturnType<typeof us
           className="text-sm text-muted-foreground prose prose-sm max-w-none"
           dangerouslySetInnerHTML={{ __html: sanitizedBody }}
         />
-        {createdAt && (
-          <p className="text-xs text-muted-foreground mt-3">
-            {format(createdAt, "PPP 'at' p")}
-          </p>
-        )}
+        <div className="flex items-center justify-between mt-4">
+          {createdAt && (
+            <p className="text-xs text-muted-foreground">
+              {format(createdAt, "PPP 'at' p")}
+            </p>
+          )}
+          <div className="flex items-center gap-2">
+            {!isRead && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onMarkAsRead(notification.id)}
+                disabled={isMarkingAsRead}
+                className="text-xs"
+              >
+                <Check className="h-4 w-4 mr-1" />
+                Mark as read
+              </Button>
+            )}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-destructive hover:text-destructive"
+                  disabled={isDeleting}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete notification?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete this notification.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => onDelete(notification.id)}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -115,6 +209,15 @@ const Notifications = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { data: notifications, isLoading } = useNotifications(user?.id);
+  
+  const markAsRead = useMarkNotificationAsRead();
+  const markAllAsRead = useMarkAllNotificationsAsRead();
+  const deleteNotification = useDeleteNotification();
+  const deleteAllNotifications = useDeleteAllNotifications();
+
+  const unreadCount = useMemo(() => {
+    return notifications?.filter(n => !n.read_at).length || 0;
+  }, [notifications]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -143,14 +246,66 @@ const Notifications = () => {
         description="View your notification history"
       />
       <div className="container mx-auto px-4 py-8 max-w-3xl">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="rounded-full bg-primary/10 p-3">
-            <Bell className="h-6 w-6 text-primary" />
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div className="rounded-full bg-primary/10 p-3">
+              <Bell className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Notifications</h1>
+              <p className="text-muted-foreground">
+                {unreadCount > 0 
+                  ? `${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}`
+                  : 'Your notification history'
+                }
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">Notifications</h1>
-            <p className="text-muted-foreground">Your notification history</p>
-          </div>
+          
+          {notifications && notifications.length > 0 && (
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => markAllAsRead.mutate(user.id)}
+                  disabled={markAllAsRead.isPending}
+                >
+                  <CheckCheck className="h-4 w-4 mr-2" />
+                  Mark all as read
+                </Button>
+              )}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete all
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete all notifications?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete all your notifications.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => deleteAllNotifications.mutate(user.id)}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Delete all
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
         </div>
 
         {isLoading ? (
@@ -158,7 +313,14 @@ const Notifications = () => {
         ) : notifications && notifications.length > 0 ? (
           <div className="space-y-4">
             {notifications.map((notification) => (
-              <NotificationCard key={notification.id} notification={notification} />
+              <NotificationCard 
+                key={notification.id} 
+                notification={notification}
+                onMarkAsRead={(id) => markAsRead.mutate(id)}
+                onDelete={(id) => deleteNotification.mutate(id)}
+                isMarkingAsRead={markAsRead.isPending}
+                isDeleting={deleteNotification.isPending}
+              />
             ))}
           </div>
         ) : (
