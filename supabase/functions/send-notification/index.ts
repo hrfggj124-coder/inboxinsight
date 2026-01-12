@@ -136,6 +136,18 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
+    // 8. Validate and sanitize metadata inputs
+    const sanitizedArticleId = article_id && uuidRegex.test(article_id) ? article_id : null;
+    const sanitizedArticleTitle = article_title 
+      ? article_title.substring(0, 500).replace(/<[^>]*>/g, '') // Strip HTML and limit length
+      : null;
+    const sanitizedCommentContent = comment_content
+      ? comment_content.substring(0, 1000).replace(/<[^>]*>/g, '') // Strip HTML and limit length
+      : null;
+    const sanitizedCommenterName = commenter_name
+      ? commenter_name.substring(0, 100).replace(/<[^>]*>/g, '') // Strip HTML and limit length
+      : null;
+
     // Get recipient's email and notification preferences
     const { data: userData, error: userError } = await adminSupabase.auth.admin.getUserById(recipient_user_id);
     
@@ -183,17 +195,18 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Build email content based on type
+    // Build email content based on type - using sanitized values
     let subject = "";
     let html = "";
+    const displayTitle = sanitizedArticleTitle || "Your article";
 
     switch (type) {
       case "article_approved":
-        subject = `Your article "${article_title}" has been approved!`;
+        subject = `Your article "${displayTitle}" has been approved!`;
         html = `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
             <h1 style="color: #10B981;">Good news! 🎉</h1>
-            <p>Your article <strong>"${article_title}"</strong> has been approved and is now live on the site.</p>
+            <p>Your article <strong>"${displayTitle}"</strong> has been approved and is now live on the site.</p>
             <p>Thank you for your contribution!</p>
             <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
             <p style="color: #666; font-size: 12px;">You received this email because you have article approval notifications enabled.</p>
@@ -202,11 +215,11 @@ const handler = async (req: Request): Promise<Response> => {
         break;
 
       case "article_rejected":
-        subject = `Update on your article "${article_title}"`;
+        subject = `Update on your article "${displayTitle}"`;
         html = `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
             <h1 style="color: #EF4444;">Article Review Update</h1>
-            <p>Unfortunately, your article <strong>"${article_title}"</strong> was not approved at this time.</p>
+            <p>Unfortunately, your article <strong>"${displayTitle}"</strong> was not approved at this time.</p>
             <p>Please review our guidelines and feel free to make revisions and resubmit.</p>
             <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
             <p style="color: #666; font-size: 12px;">You received this email because you have article rejection notifications enabled.</p>
@@ -215,13 +228,16 @@ const handler = async (req: Request): Promise<Response> => {
         break;
 
       case "new_comment":
-        subject = `New comment on "${article_title}"`;
+        subject = `New comment on "${displayTitle}"`;
+        const displayComment = sanitizedCommentContent 
+          ? `${sanitizedCommentContent.substring(0, 200)}${sanitizedCommentContent.length > 200 ? "..." : ""}`
+          : "";
         html = `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
             <h1 style="color: #3B82F6;">New Comment! 💬</h1>
-            <p><strong>${commenter_name || "Someone"}</strong> commented on your article <strong>"${article_title}"</strong>:</p>
+            <p><strong>${sanitizedCommenterName || "Someone"}</strong> commented on your article <strong>"${displayTitle}"</strong>:</p>
             <blockquote style="border-left: 3px solid #3B82F6; padding-left: 15px; margin: 20px 0; color: #555;">
-              ${comment_content?.substring(0, 200)}${(comment_content?.length || 0) > 200 ? "..." : ""}
+              ${displayComment}
             </blockquote>
             <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
             <p style="color: #666; font-size: 12px;">You received this email because you have comment notifications enabled.</p>
@@ -240,13 +256,16 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log("Email sent successfully:", emailResponse);
 
-    // Log notification to queue
+    // Log notification to queue with sanitized metadata
     await adminSupabase.from("notification_queue").insert({
       recipient_user_id,
       notification_type: type,
       subject,
       body: html,
-      metadata: { article_id, article_title },
+      metadata: { 
+        article_id: sanitizedArticleId, 
+        article_title: sanitizedArticleTitle 
+      },
       status: "sent",
       sent_at: new Date().toISOString(),
     });
