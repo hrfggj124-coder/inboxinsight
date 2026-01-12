@@ -47,24 +47,27 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
     const combinedHTML = snippets.map(s => s.code).join("\n");
     
     // Sanitize HTML to prevent XSS attacks
-    // Allow common ad/analytics tags but remove dangerous scripts
+    // Remove all script tags to prevent code injection even from admin accounts
+    // For analytics/ads, use external script loading via iframe or trusted embed codes
     const sanitized = DOMPurify.sanitize(combinedHTML, {
       ALLOWED_TAGS: [
-        'div', 'span', 'p', 'a', 'img', 'iframe', 'ins', 'script',
-        'noscript', 'style', 'link', 'meta', 'section', 'article',
+        'div', 'span', 'p', 'a', 'img', 'iframe', 'ins',
+        'noscript', 'style', 'section', 'article',
         'header', 'footer', 'nav', 'aside', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
         'ul', 'ol', 'li', 'br', 'hr', 'strong', 'em', 'b', 'i', 'u'
       ],
       ALLOWED_ATTR: [
         'id', 'class', 'style', 'href', 'src', 'alt', 'title', 'target', 'rel',
-        'width', 'height', 'frameborder', 'allowfullscreen', 'loading', 'data-*',
+        'width', 'height', 'frameborder', 'allowfullscreen', 'loading',
         'data-ad-client', 'data-ad-slot', 'data-ad-format', 'data-full-width-responsive',
-        'async', 'defer', 'type', 'crossorigin', 'integrity', 'name', 'content'
+        'name', 'content'
       ],
-      // Allow data: URIs for images (common in ads)
-      ALLOW_DATA_ATTR: true,
-      // Keep scripts for analytics/ads but sanitize their content
+      // Disallow data: URIs in src attributes to prevent XSS
+      ALLOW_DATA_ATTR: false,
       FORCE_BODY: true,
+      // Forbid dangerous tags and attributes
+      FORBID_TAGS: ['script', 'object', 'embed', 'form', 'input', 'button'],
+      FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur', 'onchange', 'onsubmit'],
     });
     
     return sanitized;

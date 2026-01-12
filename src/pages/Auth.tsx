@@ -182,6 +182,15 @@ const Auth = () => {
                       'Login'
                     )}
                   </Button>
+                  
+                  <div className="text-center">
+                    <a 
+                      href="/reset-password" 
+                      className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      Forgot your password?
+                    </a>
+                  </div>
                 </form>
               </TabsContent>
               
