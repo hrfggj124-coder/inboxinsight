@@ -53,33 +53,83 @@ const MAX_NAME_LENGTH = 100;
 const MAX_CODE_LENGTH = 50000;
 const MIN_CODE_LENGTH = 1;
 
-// Forbidden patterns for security - no inline JavaScript allowed
-const FORBIDDEN_PATTERNS = [
-  /<script\b[^>]*>/i,           // Script tags
-  /javascript:/i,               // JavaScript protocol
-  /on\w+\s*=/i,                 // Event handlers (onclick, onerror, etc.)
-  /data:text\/html/i,           // Data URLs with HTML
-  /<object\b/i,                 // Object tags
-  /<embed\b/i,                  // Embed tags
-  /eval\s*\(/i,                 // Eval function calls
+// Trusted ad network domains - scripts from these sources are allowed
+const TRUSTED_SCRIPT_DOMAINS = [
+  'googletagmanager.com',
+  'googlesyndication.com',
+  'google-analytics.com',
+  'googleadservices.com',
+  'adsterra.com',
+  'effectivegatecpm.com', // Adsterra CDN
+  'doubleclick.net',
+  'facebook.net',
+  'connect.facebook.net',
+  'analytics.tiktok.com',
+];
+
+// Check if a script tag uses a trusted domain
+const isScriptFromTrustedDomain = (code: string): boolean => {
+  // Match script tags with src attributes
+  const scriptSrcRegex = /<script[^>]+src\s*=\s*["']([^"']+)["'][^>]*>/gi;
+  let match;
+  
+  while ((match = scriptSrcRegex.exec(code)) !== null) {
+    const srcUrl = match[1];
+    const isTrusted = TRUSTED_SCRIPT_DOMAINS.some(domain => 
+      srcUrl.includes(domain)
+    );
+    if (!isTrusted) {
+      return false;
+    }
+  }
+  
+  return true;
+};
+
+// Check if code contains inline scripts (not just external script tags)
+const hasInlineScripts = (code: string): boolean => {
+  // Check for script tags with content (not just src)
+  const inlineScriptRegex = /<script[^>]*>[\s\S]*?<\/script>/gi;
+  const matches = code.match(inlineScriptRegex) || [];
+  
+  for (const match of matches) {
+    // If script has content but no src, it's inline
+    if (!match.includes('src=') && match.replace(/<script[^>]*>/i, '').replace(/<\/script>/i, '').trim().length > 0) {
+      return true;
+    }
+  }
+  return false;
+};
+
+// Forbidden patterns for security - dangerous inline JavaScript
+const FORBIDDEN_PATTERNS: { pattern: RegExp; message: string }[] = [
+  { pattern: /javascript:/i, message: "JavaScript URLs are not allowed for security reasons." },
+  { pattern: /on\w+\s*=/i, message: "Inline event handlers (onclick, onerror, etc.) are not allowed for security reasons." },
+  { pattern: /data:text\/html/i, message: "Data URLs with HTML content are not allowed for security reasons." },
+  { pattern: /<object\b/i, message: "Object tags are not allowed for security reasons." },
+  { pattern: /<embed\b/i, message: "Embed tags are not allowed for security reasons. Use iframe instead." },
+  { pattern: /eval\s*\(/i, message: "The eval() function is not allowed for security reasons." },
 ];
 
 // Check if code contains forbidden patterns
 const containsForbiddenPatterns = (code: string): string | null => {
-  for (const pattern of FORBIDDEN_PATTERNS) {
+  // Check inline scripts first
+  if (hasInlineScripts(code)) {
+    return "Inline scripts are not allowed. Only external scripts from trusted ad networks are permitted.";
+  }
+  
+  // Check for script tags from untrusted sources
+  if (/<script\b/i.test(code) && !isScriptFromTrustedDomain(code)) {
+    return "Script tags are only allowed from trusted ad networks (Google, Adsterra, Facebook, TikTok). Use iframe-based embeds for other sources.";
+  }
+  
+  // Check other forbidden patterns
+  for (const { pattern, message } of FORBIDDEN_PATTERNS) {
     if (pattern.test(code)) {
-      if (/<script\b/i.test(code)) {
-        return "Script tags are not allowed. Use iframe-based embeds or external script loading instead.";
-      }
-      if (/javascript:/i.test(code)) {
-        return "JavaScript URLs are not allowed for security reasons.";
-      }
-      if (/on\w+\s*=/i.test(code)) {
-        return "Inline event handlers (onclick, onerror, etc.) are not allowed for security reasons.";
-      }
-      return "This code contains forbidden patterns that could pose a security risk.";
+      return message;
     }
   }
+  
   return null;
 };
 
@@ -98,7 +148,7 @@ const validateSnippet = (name: string, code: string): string | null => {
     return `Code must be ${MAX_CODE_LENGTH} characters or less`;
   }
   
-  // Security check - no inline scripts or dangerous patterns
+  // Security check - validate script sources and patterns
   const securityError = containsForbiddenPatterns(code);
   if (securityError) {
     return securityError;
