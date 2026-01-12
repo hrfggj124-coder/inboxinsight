@@ -3,75 +3,35 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMemo, useEffect } from "react";
 import DOMPurify from "dompurify";
 
-interface HTMLSnippet {
-  id: string;
-  name: string;
-  code: string;
-  location: string;
-  priority: number;
-  is_active: boolean;
+interface SnippetResponse {
+  html: string;
+  scripts: string[];
 }
 
-// Trusted ad network domains - scripts from these sources are allowed
-const TRUSTED_SCRIPT_DOMAINS = [
-  'googletagmanager.com',
-  'googlesyndication.com',
-  'google-analytics.com',
-  'googleadservices.com',
-  'adsterra.com',
-  'effectivegatecpm.com', // Adsterra CDN
-  'doubleclick.net',
-  'facebook.net',
-  'connect.facebook.net',
-  'analytics.tiktok.com',
-];
-
-// Extract and validate script tags from HTML
-const extractTrustedScripts = (html: string): { trustedScripts: string[]; cleanedHtml: string } => {
-  const trustedScripts: string[] = [];
-  let cleanedHtml = html;
-  
-  // Match script tags with src attributes
-  const scriptRegex = /<script[^>]+src\s*=\s*["']([^"']+)["'][^>]*><\/script>/gi;
-  let match;
-  
-  while ((match = scriptRegex.exec(html)) !== null) {
-    const fullTag = match[0];
-    const srcUrl = match[1];
-    
-    // Check if script is from trusted domain
-    const isTrusted = TRUSTED_SCRIPT_DOMAINS.some(domain => 
-      srcUrl.includes(domain)
-    );
-    
-    if (isTrusted) {
-      trustedScripts.push(srcUrl);
-      cleanedHtml = cleanedHtml.replace(fullTag, '');
-    }
-  }
-  
-  return { trustedScripts, cleanedHtml };
-};
-
-// Hook to fetch and render HTML snippets for a specific location
+// Hook to fetch HTML snippets via secure edge function
+// This prevents exposure of raw ad code while still serving sanitized content
 export const useHTMLSnippets = (location: string) => {
-  const { data: snippets, isLoading } = useQuery({
-    queryKey: ["html-snippets", location],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("html_snippets")
-        .select("*")
-        .eq("location", location)
-        .eq("is_active", true)
-        .order("priority", { ascending: false });
+  const { data, isLoading } = useQuery({
+    queryKey: ["html-snippets-secure", location],
+    queryFn: async (): Promise<SnippetResponse> => {
+      const { data, error } = await supabase.functions.invoke('get-html-snippets', {
+        body: { location }
+      });
 
-      if (error) throw error;
-      return data as HTMLSnippet[];
+      if (error) {
+        console.error("Error fetching html snippets:", error);
+        return { html: '', scripts: [] };
+      }
+      
+      return data as SnippetResponse;
     },
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 
-  return { snippets, isLoading };
+  return { 
+    snippetData: data || { html: '', scripts: [] }, 
+    isLoading 
+  };
 };
 
 // Component to render HTML snippets at a specific location
@@ -81,20 +41,14 @@ interface HTMLSnippetRendererProps {
 }
 
 export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRendererProps) => {
-  const { snippets, isLoading } = useHTMLSnippets(location);
+  const { snippetData, isLoading } = useHTMLSnippets(location);
 
-  // Extract trusted scripts and sanitized HTML
-  const { sanitizedHTML, trustedScripts } = useMemo(() => {
-    if (!snippets || snippets.length === 0) return { sanitizedHTML: "", trustedScripts: [] };
+  // Additional client-side sanitization for defense in depth
+  const sanitizedHTML = useMemo(() => {
+    if (!snippetData.html) return "";
     
-    const combinedHTML = snippets.map(s => s.code).join("\n");
-    
-    // Extract trusted ad scripts before sanitization
-    const { trustedScripts, cleanedHtml } = extractTrustedScripts(combinedHTML);
-    
-    // Sanitize remaining HTML to prevent XSS attacks
-    // Keep iframe-based ads and safe HTML elements
-    const sanitized = DOMPurify.sanitize(cleanedHtml, {
+    // Double-sanitize on client for defense in depth
+    return DOMPurify.sanitize(snippetData.html, {
       ALLOWED_TAGS: [
         'div', 'span', 'p', 'a', 'img', 'iframe', 'ins',
         'noscript', 'style', 'section', 'article',
@@ -107,24 +61,20 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
         'data-ad-client', 'data-ad-slot', 'data-ad-format', 'data-full-width-responsive',
         'name', 'content'
       ],
-      // Disallow data: URIs in src attributes to prevent XSS
       ALLOW_DATA_ATTR: false,
       FORCE_BODY: true,
-      // Forbid dangerous tags and attributes - scripts handled separately
       FORBID_TAGS: ['script', 'object', 'embed', 'form', 'input', 'button'],
       FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur', 'onchange', 'onsubmit'],
     });
-    
-    return { sanitizedHTML: sanitized, trustedScripts };
-  }, [snippets]);
+  }, [snippetData.html]);
 
   // Dynamically inject trusted scripts into the document
   useEffect(() => {
-    if (trustedScripts.length === 0) return;
+    if (snippetData.scripts.length === 0) return;
     
     const scriptElements: HTMLScriptElement[] = [];
     
-    trustedScripts.forEach((src) => {
+    snippetData.scripts.forEach((src) => {
       // Check if script is already loaded
       const existingScript = document.querySelector(`script[src="${src}"]`);
       if (existingScript) return;
@@ -132,9 +82,8 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
       const script = document.createElement('script');
       script.src = src;
       script.async = true;
-      script.dataset.htmlSnippet = 'true'; // Mark as snippet script for cleanup
+      script.dataset.htmlSnippet = 'true';
       
-      // Append to appropriate location
       if (location === 'head') {
         document.head.appendChild(script);
       } else {
@@ -144,7 +93,6 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
       scriptElements.push(script);
     });
     
-    // Cleanup on unmount
     return () => {
       scriptElements.forEach(script => {
         if (script.parentNode) {
@@ -152,11 +100,10 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
         }
       });
     };
-  }, [trustedScripts, location]);
+  }, [snippetData.scripts, location]);
 
-  if (isLoading || (!sanitizedHTML && trustedScripts.length === 0)) return null;
+  if (isLoading || (!sanitizedHTML && snippetData.scripts.length === 0)) return null;
 
-  // For head snippets, we handle scripts via useEffect
   if (location === "head") {
     return null;
   }
