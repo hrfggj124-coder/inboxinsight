@@ -53,6 +53,36 @@ const MAX_NAME_LENGTH = 100;
 const MAX_CODE_LENGTH = 50000;
 const MIN_CODE_LENGTH = 1;
 
+// Forbidden patterns for security - no inline JavaScript allowed
+const FORBIDDEN_PATTERNS = [
+  /<script\b[^>]*>/i,           // Script tags
+  /javascript:/i,               // JavaScript protocol
+  /on\w+\s*=/i,                 // Event handlers (onclick, onerror, etc.)
+  /data:text\/html/i,           // Data URLs with HTML
+  /<object\b/i,                 // Object tags
+  /<embed\b/i,                  // Embed tags
+  /eval\s*\(/i,                 // Eval function calls
+];
+
+// Check if code contains forbidden patterns
+const containsForbiddenPatterns = (code: string): string | null => {
+  for (const pattern of FORBIDDEN_PATTERNS) {
+    if (pattern.test(code)) {
+      if (/<script\b/i.test(code)) {
+        return "Script tags are not allowed. Use iframe-based embeds or external script loading instead.";
+      }
+      if (/javascript:/i.test(code)) {
+        return "JavaScript URLs are not allowed for security reasons.";
+      }
+      if (/on\w+\s*=/i.test(code)) {
+        return "Inline event handlers (onclick, onerror, etc.) are not allowed for security reasons.";
+      }
+      return "This code contains forbidden patterns that could pose a security risk.";
+    }
+  }
+  return null;
+};
+
 // Validation helper
 const validateSnippet = (name: string, code: string): string | null => {
   if (!name || name.trim().length === 0) {
@@ -67,6 +97,13 @@ const validateSnippet = (name: string, code: string): string | null => {
   if (code.length > MAX_CODE_LENGTH) {
     return `Code must be ${MAX_CODE_LENGTH} characters or less`;
   }
+  
+  // Security check - no inline scripts or dangerous patterns
+  const securityError = containsForbiddenPatterns(code);
+  if (securityError) {
+    return securityError;
+  }
+  
   return null;
 };
 
