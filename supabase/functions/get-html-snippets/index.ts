@@ -1,0 +1,151 @@
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+// Trusted ad network domains - scripts from these sources are allowed
+const TRUSTED_SCRIPT_DOMAINS = [
+  'googletagmanager.com',
+  'googlesyndication.com',
+  'google-analytics.com',
+  'googleadservices.com',
+  'adsterra.com',
+  'effectivegatecpm.com',
+  'doubleclick.net',
+  'facebook.net',
+  'connect.facebook.net',
+  'analytics.tiktok.com',
+];
+
+// Validate script source
+const isScriptFromTrustedDomain = (src: string): boolean => {
+  return TRUSTED_SCRIPT_DOMAINS.some(domain => src.includes(domain));
+};
+
+// Extract trusted scripts from HTML
+const extractTrustedScripts = (html: string): { trustedScripts: string[]; cleanedHtml: string } => {
+  const trustedScripts: string[] = [];
+  let cleanedHtml = html;
+  
+  const scriptRegex = /<script[^>]+src\s*=\s*["']([^"']+)["'][^>]*><\/script>/gi;
+  let match;
+  
+  while ((match = scriptRegex.exec(html)) !== null) {
+    const fullTag = match[0];
+    const srcUrl = match[1];
+    
+    if (isScriptFromTrustedDomain(srcUrl)) {
+      trustedScripts.push(srcUrl);
+      cleanedHtml = cleanedHtml.replace(fullTag, '');
+    } else {
+      // Remove untrusted scripts entirely
+      cleanedHtml = cleanedHtml.replace(fullTag, '');
+    }
+  }
+  
+  // Remove inline scripts
+  cleanedHtml = cleanedHtml.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+  
+  return { trustedScripts, cleanedHtml };
+};
+
+// Basic HTML sanitization for server-side
+const sanitizeHtml = (html: string): string => {
+  // Remove dangerous tags
+  let cleaned = html;
+  cleaned = cleaned.replace(/<object[^>]*>[\s\S]*?<\/object>/gi, '');
+  cleaned = cleaned.replace(/<embed[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<form[^>]*>[\s\S]*?<\/form>/gi, '');
+  
+  // Remove event handlers
+  cleaned = cleaned.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
+  cleaned = cleaned.replace(/\s+on\w+\s*=\s*[^\s>]*/gi, '');
+  
+  // Remove javascript: URLs
+  cleaned = cleaned.replace(/javascript:/gi, '');
+  
+  // Remove data: URLs in src/href
+  cleaned = cleaned.replace(/(?:src|href)\s*=\s*["']data:text\/html[^"']*["']/gi, '');
+  
+  return cleaned;
+};
+
+const handler = async (req: Request): Promise<Response> => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { location } = await req.json();
+    
+    if (!location || typeof location !== 'string') {
+      return new Response(
+        JSON.stringify({ error: 'Location is required' }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Validate location
+    const validLocations = ['head', 'body_start', 'body_end', 'article_top', 'article_bottom', 'sidebar', 'in-content', 'footer', 'header', 'body-start', 'body-end', 'custom'];
+    if (!validLocations.includes(location)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid location' }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Use service role to bypass RLS and fetch snippets
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const { data: snippets, error } = await adminSupabase
+      .from('html_snippets')
+      .select('code, priority')
+      .eq('location', location)
+      .eq('is_active', true)
+      .order('priority', { ascending: false });
+
+    if (error) {
+      console.error("Error fetching snippets:", error);
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch snippets' }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    if (!snippets || snippets.length === 0) {
+      return new Response(
+        JSON.stringify({ html: '', scripts: [] }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Combine all snippet code
+    const combinedHtml = snippets.map(s => s.code).join("\n");
+    
+    // Extract trusted scripts and sanitize HTML
+    const { trustedScripts, cleanedHtml } = extractTrustedScripts(combinedHtml);
+    const sanitizedHtml = sanitizeHtml(cleanedHtml);
+
+    // Return sanitized content - raw code is never exposed
+    return new Response(
+      JSON.stringify({ 
+        html: sanitizedHtml, 
+        scripts: trustedScripts 
+      }),
+      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
+  } catch (error: any) {
+    console.error("Error in get-html-snippets function:", error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
+  }
+};
+
+serve(handler);
