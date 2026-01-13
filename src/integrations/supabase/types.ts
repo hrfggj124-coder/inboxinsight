@@ -405,6 +405,42 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limits: {
+        Row: {
+          blocked_count: number
+          client_ip: string
+          created_at: string
+          function_name: string
+          id: string
+          request_count: number
+          updated_at: string
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          blocked_count?: number
+          client_ip: string
+          created_at?: string
+          function_name: string
+          id?: string
+          request_count?: number
+          updated_at?: string
+          window_end: string
+          window_start?: string
+        }
+        Update: {
+          blocked_count?: number
+          client_ip?: string
+          created_at?: string
+          function_name?: string
+          id?: string
+          request_count?: number
+          updated_at?: string
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       rss_feeds: {
         Row: {
           category_id: string | null
@@ -526,6 +562,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_expired_rate_limits: { Args: never; Returns: number }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

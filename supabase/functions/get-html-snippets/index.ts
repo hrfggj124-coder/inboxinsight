@@ -1,133 +1,17 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkRateLimit, getClientIP, getRateLimitHeaders, cleanupExpiredRecords } from "../_shared/rate-limiter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ============================================
-// Rate Limiting Configuration & Monitoring
-// ============================================
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute window
-const MAX_REQUESTS_PER_WINDOW = 60; // 60 requests per minute per IP
-const FUNCTION_NAME = 'get-html-snippets';
-
-// In-memory rate limit store (resets on function cold start)
-const rateLimitStore = new Map<string, { count: number; resetTime: number; blocked: number }>();
-
-// Rate limit event logger with structured monitoring data
-const logRateLimitEvent = (
-  eventType: 'allowed' | 'blocked' | 'warning',
-  ip: string,
-  details: { remaining: number; count: number; windowResetIn: number }
-) => {
-  const logEntry = {
-    timestamp: new Date().toISOString(),
-    function: FUNCTION_NAME,
-    eventType,
-    clientIP: ip,
-    requestCount: details.count,
-    remaining: details.remaining,
-    windowResetInSeconds: Math.ceil(details.windowResetIn / 1000),
-    limit: MAX_REQUESTS_PER_WINDOW,
-    windowMs: RATE_LIMIT_WINDOW_MS,
-  };
-
-  if (eventType === 'blocked') {
-    console.error(`[RATE_LIMIT_BLOCKED] ${JSON.stringify(logEntry)}`);
-  } else if (eventType === 'warning') {
-    console.warn(`[RATE_LIMIT_WARNING] ${JSON.stringify(logEntry)}`);
-  } else {
-    // Only log every 10th allowed request to reduce noise
-    if (details.count % 10 === 0) {
-      console.log(`[RATE_LIMIT_INFO] ${JSON.stringify(logEntry)}`);
-    }
-  }
-};
-
-// Clean up expired entries periodically
-const cleanupRateLimitStore = () => {
-  const now = Date.now();
-  for (const [key, value] of rateLimitStore.entries()) {
-    if (now > value.resetTime) {
-      // Log summary of blocked requests before cleanup
-      if (value.blocked > 0) {
-        console.warn(`[RATE_LIMIT_CLEANUP] IP ${key} had ${value.blocked} blocked requests in last window`);
-      }
-      rateLimitStore.delete(key);
-    }
-  }
-};
-
-// Check rate limit for an IP
-const checkRateLimit = (ip: string): { allowed: boolean; remaining: number; resetIn: number } => {
-  const now = Date.now();
-  const record = rateLimitStore.get(ip);
-  
-  // Clean up old entries occasionally (every 100 checks)
-  if (Math.random() < 0.01) {
-    cleanupRateLimitStore();
-  }
-  
-  if (!record || now > record.resetTime) {
-    // New window
-    rateLimitStore.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS, blocked: 0 });
-    return { allowed: true, remaining: MAX_REQUESTS_PER_WINDOW - 1, resetIn: RATE_LIMIT_WINDOW_MS };
-  }
-  
-  if (record.count >= MAX_REQUESTS_PER_WINDOW) {
-    // Rate limited - increment blocked counter and log
-    record.blocked++;
-    logRateLimitEvent('blocked', ip, {
-      remaining: 0,
-      count: record.count,
-      windowResetIn: record.resetTime - now,
-    });
-    return { allowed: false, remaining: 0, resetIn: record.resetTime - now };
-  }
-  
-  // Increment count
-  record.count++;
-  
-  // Log warning when approaching limit (80% threshold)
-  if (record.count >= MAX_REQUESTS_PER_WINDOW * 0.8) {
-    logRateLimitEvent('warning', ip, {
-      remaining: MAX_REQUESTS_PER_WINDOW - record.count,
-      count: record.count,
-      windowResetIn: record.resetTime - now,
-    });
-  } else {
-    logRateLimitEvent('allowed', ip, {
-      remaining: MAX_REQUESTS_PER_WINDOW - record.count,
-      count: record.count,
-      windowResetIn: record.resetTime - now,
-    });
-  }
-  
-  return { allowed: true, remaining: MAX_REQUESTS_PER_WINDOW - record.count, resetIn: record.resetTime - now };
-};
-
-// Get client IP from request headers
-const getClientIP = (req: Request): string => {
-  // Try various headers used by proxies/load balancers
-  const forwardedFor = req.headers.get('x-forwarded-for');
-  if (forwardedFor) {
-    return forwardedFor.split(',')[0].trim();
-  }
-  
-  const realIP = req.headers.get('x-real-ip');
-  if (realIP) {
-    return realIP;
-  }
-  
-  const cfConnectingIP = req.headers.get('cf-connecting-ip');
-  if (cfConnectingIP) {
-    return cfConnectingIP;
-  }
-  
-  // Fallback
-  return 'unknown';
+// Rate limit configuration
+const RATE_LIMIT_CONFIG = {
+  functionName: 'get-html-snippets',
+  maxRequests: 60,
+  windowMs: 60 * 1000, // 1 minute
 };
 
 // ============================================
@@ -204,20 +88,20 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    // Periodically cleanup expired records (1% chance per request)
+    if (Math.random() < 0.01) {
+      cleanupExpiredRecords().catch(console.error);
+    }
+
     // ============================================
-    // Rate Limiting Check
+    // Rate Limiting Check (Database-backed)
     // ============================================
     const clientIP = getClientIP(req);
-    const rateLimit = checkRateLimit(clientIP);
+    const rateLimit = await checkRateLimit(clientIP, RATE_LIMIT_CONFIG);
     
-    const rateLimitHeaders = {
-      'X-RateLimit-Limit': MAX_REQUESTS_PER_WINDOW.toString(),
-      'X-RateLimit-Remaining': rateLimit.remaining.toString(),
-      'X-RateLimit-Reset': Math.ceil(rateLimit.resetIn / 1000).toString(),
-    };
+    const rateLimitHeaders = getRateLimitHeaders(rateLimit, RATE_LIMIT_CONFIG.maxRequests);
     
     if (!rateLimit.allowed) {
-      // Logging handled by checkRateLimit
       return new Response(
         JSON.stringify({ error: 'Too many requests. Please try again later.' }),
         { 
