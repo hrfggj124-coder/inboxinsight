@@ -7,20 +7,54 @@ const corsHeaders = {
 };
 
 // ============================================
-// Rate Limiting Configuration
+// Rate Limiting Configuration & Monitoring
 // ============================================
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute window
 const MAX_REQUESTS_PER_WINDOW = 60; // 60 requests per minute per IP
+const FUNCTION_NAME = 'get-html-snippets';
 
 // In-memory rate limit store (resets on function cold start)
-// For production, consider using Redis or Supabase for persistent rate limiting
-const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+const rateLimitStore = new Map<string, { count: number; resetTime: number; blocked: number }>();
+
+// Rate limit event logger with structured monitoring data
+const logRateLimitEvent = (
+  eventType: 'allowed' | 'blocked' | 'warning',
+  ip: string,
+  details: { remaining: number; count: number; windowResetIn: number }
+) => {
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    function: FUNCTION_NAME,
+    eventType,
+    clientIP: ip,
+    requestCount: details.count,
+    remaining: details.remaining,
+    windowResetInSeconds: Math.ceil(details.windowResetIn / 1000),
+    limit: MAX_REQUESTS_PER_WINDOW,
+    windowMs: RATE_LIMIT_WINDOW_MS,
+  };
+
+  if (eventType === 'blocked') {
+    console.error(`[RATE_LIMIT_BLOCKED] ${JSON.stringify(logEntry)}`);
+  } else if (eventType === 'warning') {
+    console.warn(`[RATE_LIMIT_WARNING] ${JSON.stringify(logEntry)}`);
+  } else {
+    // Only log every 10th allowed request to reduce noise
+    if (details.count % 10 === 0) {
+      console.log(`[RATE_LIMIT_INFO] ${JSON.stringify(logEntry)}`);
+    }
+  }
+};
 
 // Clean up expired entries periodically
 const cleanupRateLimitStore = () => {
   const now = Date.now();
   for (const [key, value] of rateLimitStore.entries()) {
     if (now > value.resetTime) {
+      // Log summary of blocked requests before cleanup
+      if (value.blocked > 0) {
+        console.warn(`[RATE_LIMIT_CLEANUP] IP ${key} had ${value.blocked} blocked requests in last window`);
+      }
       rateLimitStore.delete(key);
     }
   }
@@ -38,17 +72,39 @@ const checkRateLimit = (ip: string): { allowed: boolean; remaining: number; rese
   
   if (!record || now > record.resetTime) {
     // New window
-    rateLimitStore.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    rateLimitStore.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS, blocked: 0 });
     return { allowed: true, remaining: MAX_REQUESTS_PER_WINDOW - 1, resetIn: RATE_LIMIT_WINDOW_MS };
   }
   
   if (record.count >= MAX_REQUESTS_PER_WINDOW) {
-    // Rate limited
+    // Rate limited - increment blocked counter and log
+    record.blocked++;
+    logRateLimitEvent('blocked', ip, {
+      remaining: 0,
+      count: record.count,
+      windowResetIn: record.resetTime - now,
+    });
     return { allowed: false, remaining: 0, resetIn: record.resetTime - now };
   }
   
   // Increment count
   record.count++;
+  
+  // Log warning when approaching limit (80% threshold)
+  if (record.count >= MAX_REQUESTS_PER_WINDOW * 0.8) {
+    logRateLimitEvent('warning', ip, {
+      remaining: MAX_REQUESTS_PER_WINDOW - record.count,
+      count: record.count,
+      windowResetIn: record.resetTime - now,
+    });
+  } else {
+    logRateLimitEvent('allowed', ip, {
+      remaining: MAX_REQUESTS_PER_WINDOW - record.count,
+      count: record.count,
+      windowResetIn: record.resetTime - now,
+    });
+  }
+  
   return { allowed: true, remaining: MAX_REQUESTS_PER_WINDOW - record.count, resetIn: record.resetTime - now };
 };
 
@@ -161,7 +217,7 @@ const handler = async (req: Request): Promise<Response> => {
     };
     
     if (!rateLimit.allowed) {
-      console.warn(`Rate limit exceeded for IP: ${clientIP}`);
+      // Logging handled by checkRateLimit
       return new Response(
         JSON.stringify({ error: 'Too many requests. Please try again later.' }),
         { 
