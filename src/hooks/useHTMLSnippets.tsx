@@ -6,6 +6,7 @@ import DOMPurify from "dompurify";
 interface SnippetResponse {
   html: string;
   scripts: string[];
+  inlineScripts?: string[];
 }
 
 // Hook to fetch HTML snippets via secure edge function
@@ -20,7 +21,7 @@ export const useHTMLSnippets = (location: string) => {
 
       if (error) {
         console.error("Error fetching html snippets:", error);
-        return { html: '', scripts: [] };
+        return { html: '', scripts: [], inlineScripts: [] };
       }
       
       return data as SnippetResponse;
@@ -29,14 +30,14 @@ export const useHTMLSnippets = (location: string) => {
   });
 
   return { 
-    snippetData: data || { html: '', scripts: [] }, 
+    snippetData: data || { html: '', scripts: [], inlineScripts: [] }, 
     isLoading 
   };
 };
 
 // Component to render HTML snippets at a specific location
 interface HTMLSnippetRendererProps {
-  location: "head" | "body_start" | "body_end" | "article_top" | "article_bottom";
+  location: "head" | "body_start" | "body_end" | "article_top" | "article_bottom" | "header" | "sidebar" | "in-content" | "footer" | "custom";
   className?: string;
 }
 
@@ -68,12 +69,38 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
     });
   }, [snippetData.html]);
 
-  // Dynamically inject trusted scripts into the document
+  // Dynamically inject trusted scripts and inline scripts into the document
   useEffect(() => {
-    if (snippetData.scripts.length === 0) return;
+    const hasScripts = snippetData.scripts.length > 0;
+    const hasInlineScripts = snippetData.inlineScripts && snippetData.inlineScripts.length > 0;
+    
+    if (!hasScripts && !hasInlineScripts) return;
     
     const scriptElements: HTMLScriptElement[] = [];
     
+    // First inject inline scripts (config variables)
+    if (hasInlineScripts) {
+      snippetData.inlineScripts!.forEach((code, index) => {
+        const scriptId = `html-snippet-inline-${location}-${index}`;
+        const existingScript = document.getElementById(scriptId);
+        if (existingScript) return;
+        
+        const script = document.createElement('script');
+        script.id = scriptId;
+        script.textContent = code;
+        script.dataset.htmlSnippet = 'true';
+        
+        if (location === 'head') {
+          document.head.appendChild(script);
+        } else {
+          document.body.appendChild(script);
+        }
+        
+        scriptElements.push(script);
+      });
+    }
+    
+    // Then inject external scripts
     snippetData.scripts.forEach((src) => {
       // Check if script is already loaded
       const existingScript = document.querySelector(`script[src="${src}"]`);
@@ -100,7 +127,7 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
         }
       });
     };
-  }, [snippetData.scripts, location]);
+  }, [snippetData.scripts, snippetData.inlineScripts, location]);
 
   if (isLoading || (!sanitizedHTML && snippetData.scripts.length === 0)) return null;
 

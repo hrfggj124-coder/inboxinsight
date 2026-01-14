@@ -29,7 +29,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Edit, Rss, ExternalLink, Loader2 } from "lucide-react";
+import { Plus, Trash2, Edit, Rss, ExternalLink, Loader2, RefreshCw, Play } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -171,6 +171,31 @@ export const RSSFeedManager = () => {
     },
   });
 
+  const fetchFeedMutation = useMutation({
+    mutationFn: async (feedId?: string) => {
+      const { data, error } = await supabase.functions.invoke('fetch-rss', {
+        body: feedId ? { feed_id: feedId } : {}
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-rss-feeds'] });
+      queryClient.invalidateQueries({ queryKey: ['rss-items'] });
+      toast({
+        title: "RSS Fetched",
+        description: `Added ${data.totalItemsAdded} new items from ${data.processed} feed(s).`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleOpenDialog = (feed?: RSSFeed) => {
     if (feed) {
       setEditingFeed(feed);
@@ -227,10 +252,25 @@ export const RSSFeedManager = () => {
             {feeds?.length || 0} feeds configured
           </p>
         </div>
-        <Button onClick={() => handleOpenDialog()} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add Feed
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline"
+            onClick={() => fetchFeedMutation.mutate(undefined)}
+            disabled={fetchFeedMutation.isPending}
+            className="gap-2"
+          >
+            {fetchFeedMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            Fetch All
+          </Button>
+          <Button onClick={() => handleOpenDialog()} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add Feed
+          </Button>
+        </div>
       </div>
 
       {feeds && feeds.length > 0 ? (
@@ -283,6 +323,16 @@ export const RSSFeedManager = () => {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => fetchFeedMutation.mutate(feed.id)}
+                        disabled={fetchFeedMutation.isPending}
+                        title="Fetch this feed"
+                      >
+                        <Play className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"

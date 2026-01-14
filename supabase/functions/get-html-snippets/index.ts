@@ -35,31 +35,65 @@ const isScriptFromTrustedDomain = (src: string): boolean => {
   return TRUSTED_SCRIPT_DOMAINS.some(domain => src.includes(domain));
 };
 
-// Extract trusted scripts from HTML
-const extractTrustedScripts = (html: string): { trustedScripts: string[]; cleanedHtml: string } => {
+// Safe ad config patterns that are allowed as inline scripts
+const SAFE_INLINE_PATTERNS = [
+  /^\s*atOptions\s*=/,           // Adsterra config
+  /^\s*\(adsbygoogle\s*=/,       // Google AdSense
+  /^\s*window\.adsbygoogle/,     // Google AdSense push
+  /^\s*(var|let|const)?\s*atOptions\s*=/,  // Adsterra with var/let/const
+];
+
+const isSafeInlineScript = (content: string): boolean => {
+  const trimmed = content.trim();
+  if (trimmed.length === 0) return true;
+  
+  // Check if matches safe patterns
+  if (SAFE_INLINE_PATTERNS.some(pattern => pattern.test(trimmed))) {
+    return true;
+  }
+  
+  // Allow simple object assignments (common in ad configs)
+  const simpleAdConfig = /^\s*(var|let|const)?\s*\w+\s*=\s*\{[\s\S]*\}\s*;?\s*$/;
+  return simpleAdConfig.test(trimmed);
+};
+
+// Extract trusted scripts and safe inline scripts from HTML
+const extractTrustedScripts = (html: string): { trustedScripts: string[]; inlineScripts: string[]; cleanedHtml: string } => {
   const trustedScripts: string[] = [];
+  const inlineScripts: string[] = [];
   let cleanedHtml = html;
   
-  const scriptRegex = /<script[^>]+src\s*=\s*["']([^"']+)["'][^>]*><\/script>/gi;
+  // Process all script tags
+  const allScriptRegex = /<script([^>]*)>([\s\S]*?)<\/script>/gi;
   let match;
   
-  while ((match = scriptRegex.exec(html)) !== null) {
+  while ((match = allScriptRegex.exec(html)) !== null) {
     const fullTag = match[0];
-    const srcUrl = match[1];
+    const attributes = match[1];
+    const content = match[2];
     
-    if (isScriptFromTrustedDomain(srcUrl)) {
-      trustedScripts.push(srcUrl);
+    // Check if it's an external script
+    const srcMatch = attributes.match(/src\s*=\s*["']([^"']+)["']/i);
+    
+    if (srcMatch) {
+      const srcUrl = srcMatch[1];
+      if (isScriptFromTrustedDomain(srcUrl)) {
+        trustedScripts.push(srcUrl);
+      }
+      // Remove external script tag from HTML
       cleanedHtml = cleanedHtml.replace(fullTag, '');
     } else {
-      // Remove untrusted scripts entirely
+      // It's an inline script
+      if (isSafeInlineScript(content)) {
+        // Keep safe inline scripts for later injection
+        inlineScripts.push(content.trim());
+      }
+      // Remove inline script tag from HTML
       cleanedHtml = cleanedHtml.replace(fullTag, '');
     }
   }
   
-  // Remove inline scripts
-  cleanedHtml = cleanedHtml.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-  
-  return { trustedScripts, cleanedHtml };
+  return { trustedScripts, inlineScripts, cleanedHtml };
 };
 
 // Basic HTML sanitization for server-side
@@ -164,15 +198,16 @@ const handler = async (req: Request): Promise<Response> => {
     // Combine all snippet code
     const combinedHtml = snippets.map(s => s.code).join("\n");
     
-    // Extract trusted scripts and sanitize HTML
-    const { trustedScripts, cleanedHtml } = extractTrustedScripts(combinedHtml);
+    // Extract trusted scripts, inline scripts, and sanitize HTML
+    const { trustedScripts, inlineScripts, cleanedHtml } = extractTrustedScripts(combinedHtml);
     const sanitizedHtml = sanitizeHtml(cleanedHtml);
 
     // Return sanitized content - raw code is never exposed
     return new Response(
       JSON.stringify({ 
         html: sanitizedHtml, 
-        scripts: trustedScripts 
+        scripts: trustedScripts,
+        inlineScripts: inlineScripts
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...rateLimitHeaders, ...corsHeaders } }
     );

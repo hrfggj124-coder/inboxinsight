@@ -86,16 +86,39 @@ const isScriptFromTrustedDomain = (code: string): boolean => {
   return true;
 };
 
-// Check if code contains inline scripts (not just external script tags)
-const hasInlineScripts = (code: string): boolean => {
-  // Check for script tags with content (not just src)
-  const inlineScriptRegex = /<script[^>]*>[\s\S]*?<\/script>/gi;
-  const matches = code.match(inlineScriptRegex) || [];
+// Check if code contains inline scripts that are dangerous (not ad-related config)
+const hasUnsafeInlineScripts = (code: string): boolean => {
+  // Match script tags with content (not just src)
+  const inlineScriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+  let match;
   
-  for (const match of matches) {
-    // If script has content but no src, it's inline
-    if (!match.includes('src=') && match.replace(/<script[^>]*>/i, '').replace(/<\/script>/i, '').trim().length > 0) {
-      return true;
+  while ((match = inlineScriptRegex.exec(code)) !== null) {
+    const fullTag = match[0];
+    const scriptContent = match[1].trim();
+    
+    // Skip external scripts (they have src attribute)
+    if (fullTag.includes('src=')) continue;
+    
+    // Skip empty scripts
+    if (scriptContent.length === 0) continue;
+    
+    // Allow common ad network configuration patterns (atOptions, adsbygoogle, etc.)
+    const safePatterns = [
+      /^\s*atOptions\s*=/,           // Adsterra config
+      /^\s*\(adsbygoogle\s*=/,       // Google AdSense
+      /^\s*window\.adsbygoogle/,     // Google AdSense push
+      /^\s*var\s+atOptions\s*=/,     // Adsterra with var
+      /^\s*let\s+atOptions\s*=/,     // Adsterra with let
+      /^\s*const\s+atOptions\s*=/,   // Adsterra with const
+    ];
+    
+    const isSafeAdConfig = safePatterns.some(pattern => pattern.test(scriptContent));
+    if (!isSafeAdConfig) {
+      // Check if it's a simple variable assignment for ads
+      const simpleAdConfig = /^\s*(var|let|const)?\s*\w+\s*=\s*\{[^}]*\}\s*;?\s*$/s;
+      if (!simpleAdConfig.test(scriptContent)) {
+        return true;
+      }
     }
   }
   return false;
@@ -113,14 +136,20 @@ const FORBIDDEN_PATTERNS: { pattern: RegExp; message: string }[] = [
 
 // Check if code contains forbidden patterns
 const containsForbiddenPatterns = (code: string): string | null => {
-  // Check inline scripts first
-  if (hasInlineScripts(code)) {
-    return "Inline scripts are not allowed. Only external scripts from trusted ad networks are permitted.";
+  // Check for unsafe inline scripts first
+  if (hasUnsafeInlineScripts(code)) {
+    return "Inline scripts are only allowed for trusted ad network configurations (atOptions, adsbygoogle, etc.).";
   }
   
-  // Check for script tags from untrusted sources
-  if (/<script\b/i.test(code) && !isScriptFromTrustedDomain(code)) {
-    return "Script tags are only allowed from trusted ad networks (Google, Adsterra, Facebook, TikTok). Use iframe-based embeds for other sources.";
+  // Check for script tags from untrusted sources (external scripts only)
+  const externalScriptRegex = /<script[^>]+src\s*=\s*["']([^"']+)["'][^>]*>/gi;
+  let match;
+  while ((match = externalScriptRegex.exec(code)) !== null) {
+    const srcUrl = match[1];
+    const isTrusted = TRUSTED_SCRIPT_DOMAINS.some(domain => srcUrl.includes(domain));
+    if (!isTrusted) {
+      return "External script tags are only allowed from trusted ad networks (Google, Adsterra, Facebook, TikTok). Use iframe-based embeds for other sources.";
+    }
   }
   
   // Check other forbidden patterns
