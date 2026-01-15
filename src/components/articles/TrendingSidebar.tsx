@@ -4,6 +4,7 @@ import { useArticles, useCategories } from "@/hooks/useArticles";
 import { getTrendingArticles, categories as staticCategories } from "@/data/articles";
 import { AdSlot } from "@/components/ads/AdSlot";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RSSArticles } from "./RSSArticles";
 
 export const TrendingSidebar = () => {
   // Fetch from database
@@ -85,6 +86,11 @@ export const TrendingSidebar = () => {
             ))}
           </div>
         )}
+      </div>
+
+      {/* RSS Articles - Real-time feed */}
+      <div className="bg-card rounded-xl border border-border p-5">
+        <RSSArticles limit={5} />
       </div>
 
       {/* Categories */}
