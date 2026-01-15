@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { ExternalLink, Rss } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRealtimeRSS } from "@/hooks/useRealtimeRSS";
 
 interface RSSItem {
   id: string;
@@ -22,6 +22,9 @@ interface RSSArticlesProps {
 }
 
 export const RSSArticles = ({ limit = 10, className = "" }: RSSArticlesProps) => {
+  // Enable real-time updates for RSS items
+  useRealtimeRSS();
+  
   const { data: items, isLoading } = useQuery({
     queryKey: ['rss-items', limit],
     queryFn: async () => {
