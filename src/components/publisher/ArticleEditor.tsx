@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AIToolsPanel } from "@/components/publisher/AIToolsPanel";
+import { RSSImportDialog } from "@/components/publisher/RSSImportDialog";
 import { ImageUpload } from "@/components/shared/ImageUpload";
 import { HTMLContent } from "@/components/articles/HTMLContent";
 import { Save, Send, ArrowLeft, Loader2, Eye, Code } from "lucide-react";
@@ -39,6 +40,8 @@ export const ArticleEditor = ({ articleId, onClose }: ArticleEditorProps) => {
   const [seoTitle, setSeoTitle] = useState("");
   const [seoDescription, setSeoDescription] = useState("");
   const [seoKeywords, setSeoKeywords] = useState<string[]>([]);
+  const [sourceName, setSourceName] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
 
   // Fetch categories
   const { data: categories } = useQuery({
@@ -80,6 +83,8 @@ export const ArticleEditor = ({ articleId, onClose }: ArticleEditorProps) => {
       setSeoTitle(article.seo_title || "");
       setSeoDescription(article.seo_description || "");
       setSeoKeywords(article.seo_keywords || []);
+      setSourceName(article.source_name || "");
+      setSourceUrl(article.source_url || "");
     } else if (!articleId) {
       // Reset form for new article
       setTitle("");
@@ -90,6 +95,8 @@ export const ArticleEditor = ({ articleId, onClose }: ArticleEditorProps) => {
       setSeoTitle("");
       setSeoDescription("");
       setSeoKeywords([]);
+      setSourceName("");
+      setSourceUrl("");
     }
   }, [article, articleId]);
 
@@ -118,6 +125,8 @@ export const ArticleEditor = ({ articleId, onClose }: ArticleEditorProps) => {
         read_time: readTime,
         status,
         author_id: user?.id,
+        source_name: sourceName || null,
+        source_url: sourceUrl || null,
       };
 
       if (articleId) {
@@ -180,6 +189,20 @@ export const ArticleEditor = ({ articleId, onClose }: ArticleEditorProps) => {
     setContent(improvedContent);
   };
 
+  const handleRSSImport = (data: {
+    title: string;
+    content: string;
+    excerpt: string;
+    sourceName: string;
+    sourceUrl: string;
+  }) => {
+    setTitle(data.title);
+    setContent(data.content);
+    setExcerpt(data.excerpt);
+    setSourceName(data.sourceName);
+    setSourceUrl(data.sourceUrl);
+  };
+
   if (isLoading && articleId) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -192,11 +215,14 @@ export const ArticleEditor = ({ articleId, onClose }: ArticleEditorProps) => {
     <div className="grid lg:grid-cols-3 gap-6">
       {/* Main Editor */}
       <div className="lg:col-span-2 space-y-6">
-        <div className="flex items-center justify-between">
-          <Button variant="ghost" onClick={onClose} className="gap-2">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Articles
-          </Button>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={onClose} className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Back to Articles
+            </Button>
+            {!articleId && <RSSImportDialog onImport={handleRSSImport} />}
+          </div>
           <div className="flex gap-2">
             <Button 
               variant="outline" 
@@ -225,6 +251,26 @@ export const ArticleEditor = ({ articleId, onClose }: ArticleEditorProps) => {
             </Button>
           </div>
         </div>
+
+        {/* Source Attribution Notice */}
+        {sourceName && (
+          <div className="bg-muted/50 border border-border rounded-lg p-4">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Imported from:</span>
+              <span className="font-medium">{sourceName}</span>
+              {sourceUrl && (
+                <a
+                  href={sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline ml-auto"
+                >
+                  View Original
+                </a>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="bg-card rounded-xl border border-border p-6 space-y-6">
           <div className="space-y-2">
