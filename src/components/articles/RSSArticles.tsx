@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
-import { ExternalLink, Rss, RefreshCw } from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
+import { ExternalLink, Rss, RefreshCw, Clock } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRealtimeRSS } from "@/hooks/useRealtimeRSS";
 import { toast } from "sonner";
@@ -52,6 +52,24 @@ export const RSSArticles = ({ limit = 10, className = "" }: RSSArticlesProps) =>
     },
   });
 
+  // Get the most recent fetch time from feeds
+  const { data: lastFetchedAt } = useQuery({
+    queryKey: ['rss-last-fetched'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('rss_feeds')
+        .select('last_fetched_at')
+        .eq('is_active', true)
+        .not('last_fetched_at', 'is', null)
+        .order('last_fetched_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      return data?.last_fetched_at || null;
+    },
+  });
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
@@ -63,6 +81,7 @@ export const RSSArticles = ({ limit = 10, className = "" }: RSSArticlesProps) =>
       } else {
         toast.success("Feeds refreshed successfully");
         queryClient.invalidateQueries({ queryKey: ['rss-items'] });
+        queryClient.invalidateQueries({ queryKey: ['rss-last-fetched'] });
       }
     } catch (err) {
       toast.error("Failed to refresh feeds");
@@ -133,6 +152,13 @@ export const RSSArticles = ({ limit = 10, className = "" }: RSSArticlesProps) =>
           <RefreshCw className={`h-4 w-4 text-muted-foreground ${isRefreshing ? 'animate-spin' : ''}`} />
         </button>
       </div>
+      
+      {lastFetchedAt && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2 -mt-2">
+          <Clock className="h-3 w-3" />
+          <span>Updated {formatDistanceToNow(new Date(lastFetchedAt), { addSuffix: true })}</span>
+        </div>
+      )}
       
       {items.map((item) => (
         <a
