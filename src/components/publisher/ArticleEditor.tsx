@@ -195,12 +195,16 @@ export const ArticleEditor = ({ articleId, onClose }: ArticleEditorProps) => {
     excerpt: string;
     sourceName: string;
     sourceUrl: string;
+    coverImage?: string;
   }) => {
     setTitle(data.title);
     setContent(data.content);
     setExcerpt(data.excerpt);
     setSourceName(data.sourceName);
     setSourceUrl(data.sourceUrl);
+    if (data.coverImage) {
+      setCoverImage(data.coverImage);
+    }
   };
 
   if (isLoading && articleId) {

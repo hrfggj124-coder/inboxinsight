@@ -170,7 +170,29 @@ const handler = async (req: Request): Promise<Response> => {
 
     const scrapedData = firecrawlData.data;
     
-    console.log(`Successfully scraped article: ${scrapedData.metadata?.title || 'No title'}`);
+    // Extract cover image from various sources
+    let coverImage = null;
+    if (scrapedData.metadata?.ogImage) {
+      coverImage = scrapedData.metadata.ogImage;
+    } else if (scrapedData.metadata?.image) {
+      coverImage = scrapedData.metadata.image;
+    } else if (scrapedData.metadata?.twitter?.image) {
+      coverImage = scrapedData.metadata.twitter.image;
+    }
+    
+    // Try to extract first image from content if no metadata image
+    if (!coverImage && scrapedData.html) {
+      const imgMatch = scrapedData.html.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (imgMatch && imgMatch[1]) {
+        // Only use images that look like article images (not icons/logos)
+        const imgSrc = imgMatch[1];
+        if (!imgSrc.includes('favicon') && !imgSrc.includes('logo') && !imgSrc.includes('icon')) {
+          coverImage = imgSrc;
+        }
+      }
+    }
+    
+    console.log(`Successfully scraped article: ${scrapedData.metadata?.title || 'No title'}, cover: ${coverImage ? 'found' : 'none'}`);
 
     return new Response(
       JSON.stringify({
@@ -182,7 +204,9 @@ const handler = async (req: Request): Promise<Response> => {
           markdown: scrapedData.markdown || null,
           url: scrapedData.metadata?.sourceURL || formattedUrl,
           siteName: scrapedData.metadata?.siteName || null,
-          image: scrapedData.metadata?.ogImage || null,
+          coverImage: coverImage,
+          author: scrapedData.metadata?.author || null,
+          publishedTime: scrapedData.metadata?.publishedTime || null,
         }
       }),
       { 
