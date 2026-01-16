@@ -1,9 +1,21 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { 
+  checkRateLimit, 
+  getClientIP, 
+  getRateLimitHeaders 
+} from "../_shared/rate-limiter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+// Rate limit configuration: 30 requests per minute
+const RATE_LIMIT_CONFIG = {
+  functionName: 'fetch-rss',
+  maxRequests: 30,
+  windowMs: 60 * 1000, // 1 minute
 };
 
 interface RSSItem {
@@ -56,9 +68,83 @@ const handler = async (req: Request): Promise<Response> => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Apply rate limiting
+  const clientIP = getClientIP(req);
+  const rateLimitResult = await checkRateLimit(clientIP, RATE_LIMIT_CONFIG);
+  const rateLimitHeaders = getRateLimitHeaders(rateLimitResult, RATE_LIMIT_CONFIG.maxRequests);
+
+  if (!rateLimitResult.allowed) {
+    return new Response(
+      JSON.stringify({ 
+        error: "Too many requests. Please try again later.",
+        retryAfter: Math.ceil(rateLimitResult.resetIn / 1000)
+      }),
+      { 
+        status: 429, 
+        headers: { 
+          ...corsHeaders, 
+          ...rateLimitHeaders,
+          "Content-Type": "application/json",
+          "Retry-After": Math.ceil(rateLimitResult.resetIn / 1000).toString()
+        } 
+      }
+    );
+  }
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // Verify authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Authorization header required" }),
+        { status: 401, headers: { ...corsHeaders, ...rateLimitHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Create client with user's auth token to verify identity
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    if (authError || !user) {
+      console.error("Authentication failed:", authError?.message);
+      return new Response(
+        JSON.stringify({ error: "Invalid authentication" }),
+        { status: 401, headers: { ...corsHeaders, ...rateLimitHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify user has admin role
+    const { data: roles, error: rolesError } = await userClient
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id);
+
+    if (rolesError) {
+      console.error("Error fetching roles:", rolesError.message);
+      return new Response(
+        JSON.stringify({ error: "Failed to verify permissions" }),
+        { status: 500, headers: { ...corsHeaders, ...rateLimitHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const isAdmin = roles?.some(r => r.role === 'admin');
+    if (!isAdmin) {
+      console.warn(`Unauthorized RSS fetch attempt by user ${user.id}`);
+      return new Response(
+        JSON.stringify({ error: "Admin role required to trigger RSS fetch" }),
+        { status: 403, headers: { ...corsHeaders, ...rateLimitHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`RSS fetch triggered by admin user ${user.id}`);
+
+    // Use admin client for actual database operations
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get optional feed_id from request body
@@ -90,7 +176,7 @@ const handler = async (req: Request): Promise<Response> => {
     if (!feeds || feeds.length === 0) {
       return new Response(
         JSON.stringify({ success: true, message: "No active feeds to process", processed: 0 }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, ...rateLimitHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -177,7 +263,7 @@ const handler = async (req: Request): Promise<Response> => {
         totalItemsAdded,
         results,
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, ...rateLimitHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
@@ -186,7 +272,7 @@ const handler = async (req: Request): Promise<Response> => {
     
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders, ...rateLimitHeaders, "Content-Type": "application/json" } }
     );
   }
 };
