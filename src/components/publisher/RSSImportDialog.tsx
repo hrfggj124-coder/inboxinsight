@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Rss, ExternalLink, Import, Loader2 } from "lucide-react";
+import { Rss, ExternalLink, Import, Loader2, FileText, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 interface RSSItem {
@@ -41,6 +41,7 @@ interface RSSImportDialogProps {
 export const RSSImportDialog = ({ onImport }: RSSImportDialogProps) => {
   const [open, setOpen] = useState(false);
   const [importingId, setImportingId] = useState<string | null>(null);
+  const [fetchingFullId, setFetchingFullId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: items, isLoading } = useQuery({
@@ -81,11 +82,11 @@ export const RSSImportDialog = ({ onImport }: RSSImportDialogProps) => {
     },
   });
 
-  const handleImport = async (item: RSSItem) => {
+  const handleBasicImport = async (item: RSSItem) => {
     setImportingId(item.id);
     
     try {
-      // Create attribution HTML
+      // Create attribution HTML with description only
       const attributionHtml = `
 <p><em>Originally published on <a href="${item.link}" target="_blank" rel="noopener noreferrer">${item.feed?.name || 'External Source'}</a>.</em></p>
 
@@ -118,6 +119,68 @@ ${item.description ? `<p>${item.description}</p>` : '<p>[Add your article conten
     }
   };
 
+  const handleFetchFullContent = async (item: RSSItem) => {
+    setFetchingFullId(item.id);
+    
+    try {
+      toast.info("Fetching full article content...", { duration: 2000 });
+      
+      // Call the scrape-article edge function
+      const { data, error } = await supabase.functions.invoke('scrape-article', {
+        body: { url: item.link },
+      });
+
+      if (error) {
+        console.error("Scrape function error:", error);
+        throw new Error(error.message || "Failed to fetch content");
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || "Failed to fetch article content");
+      }
+
+      const scrapedData = data.data;
+      
+      // Build content with attribution
+      const fullContent = `
+<p><em>Originally published on <a href="${item.link}" target="_blank" rel="noopener noreferrer">${scrapedData.siteName || item.feed?.name || 'External Source'}</a>.</em></p>
+
+${scrapedData.content || scrapedData.markdown || '<p>[Content could not be extracted]</p>'}
+
+<hr />
+
+<p><strong>Source:</strong> <a href="${item.link}" target="_blank" rel="noopener noreferrer">${item.link}</a></p>
+      `.trim();
+
+      // Use scraped title if available, fallback to RSS title
+      const title = scrapedData.title || item.title;
+      const excerpt = scrapedData.description || item.description?.substring(0, 160) || '';
+
+      // Pass data to editor
+      onImport({
+        title,
+        content: fullContent,
+        excerpt,
+        sourceName: scrapedData.siteName || item.feed?.name || 'External Source',
+        sourceUrl: item.link,
+      });
+
+      // Mark as imported
+      await markImportedMutation.mutateAsync(item.id);
+      
+      toast.success("Full article content imported successfully");
+      setOpen(false);
+    } catch (error) {
+      console.error("Full content fetch error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch full content";
+      toast.error(errorMessage);
+    } finally {
+      setFetchingFullId(null);
+    }
+  };
+
+  const isProcessing = (itemId: string) => importingId === itemId || fetchingFullId === itemId;
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -133,7 +196,7 @@ ${item.description ? `<p>${item.description}</p>` : '<p>[Add your article conten
             Import RSS Article
           </DialogTitle>
           <DialogDescription>
-            Select an article from your RSS feeds to import into the editor with proper attribution.
+            Select an article to import. Use "Quick Import" for the RSS summary or "Fetch Full Content" to scrape the complete article.
           </DialogDescription>
         </DialogHeader>
 
@@ -163,7 +226,7 @@ ${item.description ? `<p>${item.description}</p>` : '<p>[Add your article conten
                   key={item.id}
                   className="p-4 rounded-lg border border-border hover:border-primary/50 transition-colors group"
                 >
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col gap-3">
                     <div className="flex-1 min-w-0">
                       <h4 className="font-medium line-clamp-2 group-hover:text-primary transition-colors">
                         {item.title}
@@ -197,21 +260,39 @@ ${item.description ? `<p>${item.description}</p>` : '<p>[Add your article conten
                       </div>
                     </div>
                     
-                    <Button
-                      size="sm"
-                      onClick={() => handleImport(item)}
-                      disabled={importingId === item.id}
-                      className="shrink-0"
-                    >
-                      {importingId === item.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <Import className="h-4 w-4 mr-1" />
-                          Import
-                        </>
-                      )}
-                    </Button>
+                    <div className="flex items-center gap-2 justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleBasicImport(item)}
+                        disabled={isProcessing(item.id)}
+                        className="gap-1.5"
+                      >
+                        {importingId === item.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <FileText className="h-4 w-4" />
+                            Quick Import
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => handleFetchFullContent(item)}
+                        disabled={isProcessing(item.id)}
+                        className="gap-1.5"
+                      >
+                        {fetchingFullId === item.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Sparkles className="h-4 w-4" />
+                            Fetch Full Content
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
