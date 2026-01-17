@@ -37,7 +37,7 @@ export const useHTMLSnippets = (location: string) => {
 
 // Component to render HTML snippets at a specific location
 interface HTMLSnippetRendererProps {
-  location: "head" | "body_start" | "body_end" | "article_top" | "article_bottom" | "header" | "sidebar" | "in-content" | "footer" | "custom";
+  location: "head" | "body_start" | "body_end" | "body-start" | "body-end" | "article_top" | "article_bottom" | "header" | "sidebar" | "in-content" | "footer" | "custom";
   className?: string;
 }
 
