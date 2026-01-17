@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,8 +18,9 @@ import { AIToolsPanel } from "@/components/publisher/AIToolsPanel";
 import { RSSImportDialog } from "@/components/publisher/RSSImportDialog";
 import { ImageUpload } from "@/components/shared/ImageUpload";
 import { HTMLContent } from "@/components/articles/HTMLContent";
-import { Save, Send, ArrowLeft, Loader2, Eye, Code } from "lucide-react";
+import { Save, Send, ArrowLeft, Loader2, Eye, Code, FileText } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { marked } from "marked";
 
 interface ArticleEditorProps {
   articleId: string | null;
@@ -42,6 +43,8 @@ export const ArticleEditor = ({ articleId, onClose }: ArticleEditorProps) => {
   const [seoKeywords, setSeoKeywords] = useState<string[]>([]);
   const [sourceName, setSourceName] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
+  const [markdownContent, setMarkdownContent] = useState("");
+  const [editorMode, setEditorMode] = useState<"html" | "markdown">("html");
 
   // Fetch categories
   const { data: categories } = useQuery({
@@ -300,39 +303,140 @@ export const ArticleEditor = ({ articleId, onClose }: ArticleEditorProps) => {
           </div>
 
           <div className="space-y-2">
-            <Label>Content (supports HTML)</Label>
-            <Tabs defaultValue="edit" className="w-full">
-              <TabsList className="mb-2">
-                <TabsTrigger value="edit" className="gap-2">
-                  <Code className="h-4 w-4" /> Edit
-                </TabsTrigger>
-                <TabsTrigger value="preview" className="gap-2">
-                  <Eye className="h-4 w-4" /> Preview
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="edit" className="mt-0">
-                <Textarea
-                  id="content"
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="Write your article content here... You can use HTML tags for formatting."
-                  rows={15}
-                  className="min-h-[400px] font-mono text-sm"
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  Supports HTML: &lt;h2&gt;, &lt;p&gt;, &lt;strong&gt;, &lt;em&gt;, &lt;ul&gt;, &lt;ol&gt;, &lt;blockquote&gt;, &lt;a&gt;, &lt;img&gt;, and more.
-                </p>
-              </TabsContent>
-              <TabsContent value="preview" className="mt-0">
-                <div className="min-h-[400px] border border-border rounded-md p-4 bg-background overflow-auto">
-                  {content ? (
-                    <HTMLContent content={content} />
-                  ) : (
-                    <p className="text-muted-foreground italic">No content to preview</p>
-                  )}
-                </div>
-              </TabsContent>
-            </Tabs>
+            <div className="flex items-center justify-between">
+              <Label>Content</Label>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Editor Mode:</span>
+                <Select value={editorMode} onValueChange={(value: "html" | "markdown") => setEditorMode(value)}>
+                  <SelectTrigger className="w-[140px] h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="html">
+                      <span className="flex items-center gap-2">
+                        <Code className="h-3 w-3" /> HTML
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="markdown">
+                      <span className="flex items-center gap-2">
+                        <FileText className="h-3 w-3" /> Markdown
+                      </span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {editorMode === "markdown" ? (
+              <Tabs defaultValue="write" className="w-full">
+                <TabsList className="mb-2">
+                  <TabsTrigger value="write" className="gap-2">
+                    <FileText className="h-4 w-4" /> Write
+                  </TabsTrigger>
+                  <TabsTrigger value="preview" className="gap-2">
+                    <Eye className="h-4 w-4" /> Preview
+                  </TabsTrigger>
+                  <TabsTrigger value="html" className="gap-2">
+                    <Code className="h-4 w-4" /> HTML Output
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="write" className="mt-0">
+                  <Textarea
+                    value={markdownContent}
+                    onChange={(e) => {
+                      setMarkdownContent(e.target.value);
+                      // Auto-convert markdown to HTML for the content field
+                      const html = marked.parse(e.target.value, { async: false }) as string;
+                      setContent(html);
+                    }}
+                    placeholder="Write in Markdown...
+
+# Heading 1
+## Heading 2
+
+**Bold text** and *italic text*
+
+- List item 1
+- List item 2
+
+[Link text](https://example.com)
+
+![Image alt](image-url.jpg)"
+                    rows={15}
+                    className="min-h-[400px] font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Supports Markdown: # Headers, **bold**, *italic*, [links](url), ![images](url), lists, blockquotes, code blocks.
+                  </p>
+                </TabsContent>
+                <TabsContent value="preview" className="mt-0">
+                  <div className="min-h-[400px] border border-border rounded-md p-4 bg-background overflow-auto">
+                    {content ? (
+                      <HTMLContent content={content} trusted />
+                    ) : (
+                      <p className="text-muted-foreground italic">No content to preview</p>
+                    )}
+                  </div>
+                </TabsContent>
+                <TabsContent value="html" className="mt-0">
+                  <div className="relative">
+                    <Textarea
+                      value={content}
+                      readOnly
+                      rows={15}
+                      className="min-h-[400px] font-mono text-sm bg-muted/30"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="absolute top-2 right-2"
+                      onClick={() => {
+                        navigator.clipboard.writeText(content);
+                        toast({ title: "Copied!", description: "HTML copied to clipboard" });
+                      }}
+                    >
+                      Copy HTML
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Generated HTML output. You can copy this to use elsewhere.
+                  </p>
+                </TabsContent>
+              </Tabs>
+            ) : (
+              <Tabs defaultValue="edit" className="w-full">
+                <TabsList className="mb-2">
+                  <TabsTrigger value="edit" className="gap-2">
+                    <Code className="h-4 w-4" /> Edit
+                  </TabsTrigger>
+                  <TabsTrigger value="preview" className="gap-2">
+                    <Eye className="h-4 w-4" /> Preview
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="edit" className="mt-0">
+                  <Textarea
+                    id="content"
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder="Write your article content here... You can use HTML tags for formatting."
+                    rows={15}
+                    className="min-h-[400px] font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Supports HTML: &lt;h2&gt;, &lt;p&gt;, &lt;strong&gt;, &lt;em&gt;, &lt;ul&gt;, &lt;ol&gt;, &lt;blockquote&gt;, &lt;a&gt;, &lt;img&gt;, scripts, embeds, and more.
+                  </p>
+                </TabsContent>
+                <TabsContent value="preview" className="mt-0">
+                  <div className="min-h-[400px] border border-border rounded-md p-4 bg-background overflow-auto">
+                    {content ? (
+                      <HTMLContent content={content} trusted />
+                    ) : (
+                      <p className="text-muted-foreground italic">No content to preview</p>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            )}
           </div>
 
           <div className="grid sm:grid-cols-2 gap-4">
