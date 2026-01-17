@@ -6,8 +6,9 @@ interface AdSlotProps {
 }
 
 // Map ad slot types to HTML snippet locations
-const locationMap: Record<string, "header" | "body_start" | "body_end" | "article_top" | "article_bottom" | "sidebar" | "in-content" | "footer" | "custom"> = {
-  banner: "body_start",
+// Note: Database uses "body-start" format, not "body_start"
+const locationMap: Record<string, "header" | "body-start" | "body-end" | "article_top" | "article_bottom" | "sidebar" | "in-content" | "footer" | "custom"> = {
+  banner: "body-start",
   header: "header",
   sidebar: "sidebar",
   inline: "in-content",

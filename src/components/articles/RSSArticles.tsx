@@ -6,6 +6,7 @@ import { ExternalLink, Rss, RefreshCw, Clock } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRealtimeRSS } from "@/hooks/useRealtimeRSS";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface RSSItem {
   id: string;
@@ -26,6 +27,7 @@ interface RSSArticlesProps {
 export const RSSArticles = ({ limit = 10, className = "" }: RSSArticlesProps) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const queryClient = useQueryClient();
+  const { isAdmin } = useAuth();
   
   // Enable real-time updates for RSS items
   useRealtimeRSS();
@@ -71,6 +73,11 @@ export const RSSArticles = ({ limit = 10, className = "" }: RSSArticlesProps) =>
   });
 
   const handleRefresh = async () => {
+    if (!isAdmin) {
+      toast.error("Admin access required to refresh feeds");
+      return;
+    }
+    
     setIsRefreshing(true);
     try {
       const { error } = await supabase.functions.invoke('fetch-rss');
@@ -119,18 +126,20 @@ export const RSSArticles = ({ limit = 10, className = "" }: RSSArticlesProps) =>
             <Rss className="h-5 w-5 text-primary" />
             <h3 className="font-display font-semibold">Latest from RSS</h3>
           </div>
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="p-1.5 rounded-md hover:bg-muted transition-colors disabled:opacity-50"
-            title="Refresh feeds"
-          >
-            <RefreshCw className={`h-4 w-4 text-muted-foreground ${isRefreshing ? 'animate-spin' : ''}`} />
-          </button>
+          {isAdmin && (
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="p-1.5 rounded-md hover:bg-muted transition-colors disabled:opacity-50"
+              title="Refresh feeds (Admin only)"
+            >
+              <RefreshCw className={`h-4 w-4 text-muted-foreground ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
+          )}
         </div>
         <Rss className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
         <p className="text-sm text-muted-foreground">
-          No RSS items yet. Click refresh to fetch feeds.
+          No RSS items yet.{isAdmin ? " Click refresh to fetch feeds." : ""}
         </p>
       </div>
     );
@@ -143,14 +152,16 @@ export const RSSArticles = ({ limit = 10, className = "" }: RSSArticlesProps) =>
           <Rss className="h-5 w-5 text-primary" />
           <h3 className="font-display font-semibold">Latest from RSS</h3>
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          className="p-1.5 rounded-md hover:bg-muted transition-colors disabled:opacity-50"
-          title="Refresh feeds"
-        >
-          <RefreshCw className={`h-4 w-4 text-muted-foreground ${isRefreshing ? 'animate-spin' : ''}`} />
-        </button>
+        {isAdmin && (
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="p-1.5 rounded-md hover:bg-muted transition-colors disabled:opacity-50"
+            title="Refresh feeds (Admin only)"
+          >
+            <RefreshCw className={`h-4 w-4 text-muted-foreground ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
+        )}
       </div>
       
       {lastFetchedAt && (
