@@ -9,23 +9,86 @@ interface HTMLContentProps {
 
 // Trusted domains for external scripts and iframes
 const TRUSTED_DOMAINS = [
+  // Ad networks
   'adsterra.com',
   'alwingulla.com',
   'googlesyndication.com',
   'googleadservices.com',
   'google.com',
   'doubleclick.net',
+  'adskeeper.com',
+  'mgid.com',
+  'taboola.com',
+  'outbrain.com',
+  'propellerads.com',
+  'revcontent.com',
+  'adblade.com',
+  'infolinks.com',
+  'media.net',
+  'amazon-adsystem.com',
+  'bidvertiser.com',
+  'adnxs.com',
+  'criteo.com',
+  'pubmatic.com',
+  // Social platforms
   'facebook.net',
   'facebook.com',
   'twitter.com',
+  'x.com',
   'youtube.com',
   'youtube-nocookie.com',
   'vimeo.com',
   'instagram.com',
   'tiktok.com',
+  'pinterest.com',
+  'linkedin.com',
+  'reddit.com',
+  // Embeds and widgets
   'cdn.embedly.com',
   'platform.twitter.com',
   'connect.facebook.net',
+  'player.vimeo.com',
+  'codepen.io',
+  'jsfiddle.net',
+  'codesandbox.io',
+  'gist.github.com',
+  'giphy.com',
+  'spotify.com',
+  'soundcloud.com',
+  'anchor.fm',
+  'buzzsprout.com',
+  'simplecast.com',
+  // Analytics and tracking
+  'googletagmanager.com',
+  'google-analytics.com',
+  'clarity.ms',
+  'hotjar.com',
+  'cdn.segment.com',
+  // CDNs
+  'cdnjs.cloudflare.com',
+  'unpkg.com',
+  'jsdelivr.net',
+  'stackpath.bootstrapcdn.com',
+  'maxcdn.bootstrapcdn.com',
+];
+
+// Trusted inline script patterns (beyond variable assignment)
+const TRUSTED_INLINE_PATTERNS = [
+  'atOptions',           // Adsterra
+  'adsbygoogle',         // Google AdSense
+  'dataLayer',           // Google Tag Manager
+  'fbq(',                // Facebook Pixel
+  'gtag(',               // Google Analytics
+  '_tfa.',               // Taboola
+  'mgid.',               // MGID
+  'outbrain.',           // Outbrain
+  'disqus_config',       // Disqus comments
+  'DISQUS.',             // Disqus
+  'instgrm.',            // Instagram embeds
+  'twttr.',              // Twitter embeds
+  'SC.Widget',           // SoundCloud
+  'Spotify.',            // Spotify embeds
+  'Codepen.',            // CodePen embeds
 ];
 
 const isTrustedSource = (url: string): boolean => {
@@ -35,6 +98,26 @@ const isTrustedSource = (url: string): boolean => {
   } catch {
     return false;
   }
+};
+
+const isTrustedInlineScript = (code: string): boolean => {
+  // Check for known patterns
+  if (TRUSTED_INLINE_PATTERNS.some(pattern => code.includes(pattern))) {
+    return true;
+  }
+  // Variable assignment pattern (config objects)
+  if (/^\s*\w+\s*=\s*{/.test(code)) {
+    return true;
+  }
+  // Function call patterns for known services
+  if (/^\s*(function|var|let|const|window\.)/.test(code)) {
+    return true;
+  }
+  // IIFE patterns
+  if (/^\s*\(function/.test(code) || /^\s*\(\s*\(\s*\)/.test(code)) {
+    return true;
+  }
+  return false;
 };
 
 // Sanitize HTML content to prevent XSS attacks while allowing safe HTML
@@ -119,14 +202,9 @@ export const HTMLContent = ({ content, className = "", trusted = false }: HTMLCo
       const src = script.getAttribute("src");
       const inlineCode = script.textContent || "";
       
-      // Only execute scripts from trusted sources or config-style inline scripts
+      // Only execute scripts from trusted sources or verified inline patterns
       const isExternalTrusted = src && isTrustedSource(src);
-      const isConfigScript = !src && (
-        inlineCode.includes("atOptions") || 
-        inlineCode.includes("adsbygoogle") ||
-        inlineCode.includes("dataLayer") ||
-        /^\s*\w+\s*=\s*{/.test(inlineCode) // Variable assignment pattern
-      );
+      const isConfigScript = !src && isTrustedInlineScript(inlineCode);
       
       if (isExternalTrusted || isConfigScript) {
         const newScript = document.createElement("script");
