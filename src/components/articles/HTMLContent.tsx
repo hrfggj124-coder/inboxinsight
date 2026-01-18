@@ -12,6 +12,8 @@ const TRUSTED_DOMAINS = [
   // Ad networks
   'adsterra.com',
   'alwingulla.com',
+  'highperformanceformat.com',
+  'effectivegatecpm.com',
   'googlesyndication.com',
   'googleadservices.com',
   'google.com',
