@@ -96,62 +96,80 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Verify authentication
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    let isAuthorized = false;
+    let authMethod = '';
+
+    // Check if this is a scheduled/cron call using service role key
+    if (authHeader?.includes(supabaseServiceKey)) {
+      isAuthorized = true;
+      authMethod = 'service_role';
+      console.log("RSS fetch triggered by scheduled cron job (service role)");
+    } else if (authHeader) {
+      // Verify user authentication
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } }
+      });
+
+      const { data: { user }, error: authError } = await userClient.auth.getUser();
+      if (authError || !user) {
+        console.error("Authentication failed:", authError?.message);
+        return new Response(
+          JSON.stringify({ error: "Invalid authentication" }),
+          { status: 401, headers: { ...corsHeaders, ...rateLimitHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Verify user has admin role
+      const { data: roles, error: rolesError } = await userClient
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id);
+
+      if (rolesError) {
+        console.error("Error fetching roles:", rolesError.message);
+        return new Response(
+          JSON.stringify({ error: "Failed to verify permissions" }),
+          { status: 500, headers: { ...corsHeaders, ...rateLimitHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const isAdmin = roles?.some(r => r.role === 'admin');
+      if (!isAdmin) {
+        console.warn(`Unauthorized RSS fetch attempt by user ${user.id}`);
+        return new Response(
+          JSON.stringify({ error: "Admin role required to trigger RSS fetch" }),
+          { status: 403, headers: { ...corsHeaders, ...rateLimitHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      isAuthorized = true;
+      authMethod = 'admin_user';
+      console.log(`RSS fetch triggered by admin user ${user.id}`);
+    } else {
       return new Response(
         JSON.stringify({ error: "Authorization header required" }),
         { status: 401, headers: { ...corsHeaders, ...rateLimitHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Create client with user's auth token to verify identity
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
-
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) {
-      console.error("Authentication failed:", authError?.message);
+    if (!isAuthorized) {
       return new Response(
-        JSON.stringify({ error: "Invalid authentication" }),
-        { status: 401, headers: { ...corsHeaders, ...rateLimitHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Verify user has admin role
-    const { data: roles, error: rolesError } = await userClient
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id);
-
-    if (rolesError) {
-      console.error("Error fetching roles:", rolesError.message);
-      return new Response(
-        JSON.stringify({ error: "Failed to verify permissions" }),
-        { status: 500, headers: { ...corsHeaders, ...rateLimitHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const isAdmin = roles?.some(r => r.role === 'admin');
-    if (!isAdmin) {
-      console.warn(`Unauthorized RSS fetch attempt by user ${user.id}`);
-      return new Response(
-        JSON.stringify({ error: "Admin role required to trigger RSS fetch" }),
+        JSON.stringify({ error: "Unauthorized" }),
         { status: 403, headers: { ...corsHeaders, ...rateLimitHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    console.log(`RSS fetch triggered by admin user ${user.id}`);
 
     // Use admin client for actual database operations
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get optional feed_id from request body
     let feedId: string | null = null;
+    let fetchDueOnly = false;
     try {
       const body = await req.json();
       feedId = body.feed_id || null;
+      fetchDueOnly = body.fetch_due_only || false;
     } catch {
       // No body provided, fetch all active feeds
     }
@@ -180,10 +198,37 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
+    // Filter feeds that are due for fetching based on their interval
+    const now = new Date();
+    const feedsToProcess = fetchDueOnly 
+      ? feeds.filter(feed => {
+          if (!feed.last_fetched_at) return true;
+          const lastFetched = new Date(feed.last_fetched_at);
+          const intervalMs = (feed.fetch_interval_minutes || 60) * 60 * 1000;
+          return (now.getTime() - lastFetched.getTime()) >= intervalMs;
+        })
+      : feeds;
+
+    if (feedsToProcess.length === 0) {
+      console.log("No feeds due for fetching based on their intervals");
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: "No feeds due for fetching", 
+          processed: 0,
+          totalFeeds: feeds.length,
+          authMethod 
+        }),
+        { status: 200, headers: { ...corsHeaders, ...rateLimitHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`Processing ${feedsToProcess.length} feed(s) out of ${feeds.length} total active feeds`);
+
     let totalItemsAdded = 0;
     const results: { feedName: string; itemsAdded: number; error?: string }[] = [];
 
-    for (const feed of feeds) {
+    for (const feed of feedsToProcess) {
       try {
         console.log(`Fetching RSS feed: ${feed.name} (${feed.url})`);
         
@@ -254,14 +299,16 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
-    console.log(`RSS fetch complete. Total items added: ${totalItemsAdded}`);
+    console.log(`RSS fetch complete. Total items added: ${totalItemsAdded}. Auth method: ${authMethod}`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        processed: feeds.length,
+        processed: feedsToProcess.length,
+        totalFeeds: feeds.length,
         totalItemsAdded,
         results,
+        authMethod,
       }),
       { status: 200, headers: { ...corsHeaders, ...rateLimitHeaders, "Content-Type": "application/json" } }
     );
