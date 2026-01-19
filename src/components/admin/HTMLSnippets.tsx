@@ -55,16 +55,47 @@ const MIN_CODE_LENGTH = 1;
 
 // Trusted ad network domains - scripts from these sources are allowed
 const TRUSTED_SCRIPT_DOMAINS = [
+  // Google
   'googletagmanager.com',
   'googlesyndication.com',
   'google-analytics.com',
   'googleadservices.com',
-  'adsterra.com',
-  'effectivegatecpm.com', // Adsterra CDN
   'doubleclick.net',
+  // Adsterra
+  'adsterra.com',
+  'effectivegatecpm.com',
+  'highperformanceformat.com',
+  'alwingulla.com',
+  // Social
   'facebook.net',
   'connect.facebook.net',
   'analytics.tiktok.com',
+  // Ad Networks
+  'adskeeper.com',
+  'mgid.com',
+  'taboola.com',
+  'outbrain.com',
+  'propellerads.com',
+  'revcontent.com',
+  'infolinks.com',
+  'media.net',
+  'amazon-adsystem.com',
+  'bidvertiser.com',
+  'adnxs.com',
+  'criteo.com',
+  'pubmatic.com',
+  'openx.net',
+  'rubiconproject.com',
+  'spotxchange.com',
+  'teads.tv',
+  'sharethrough.com',
+  'triplelift.com',
+  'indexexchange.com',
+  'sovrn.com',
+  'adroll.com',
+  'cdn.jsdelivr.net',
+  'cdnjs.cloudflare.com',
+  'unpkg.com',
 ];
 
 // Check if a script tag uses a trusted domain
