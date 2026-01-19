@@ -4,7 +4,7 @@ import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, FileCheck, Rss, Code, ShieldAlert, FolderTree, FileText, Settings, BarChart3 } from "lucide-react";
+import { Users, FileCheck, Rss, Code, ShieldAlert, FolderTree, FileText, Settings, BarChart3, Megaphone } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserManagement } from "@/components/admin/UserManagement";
 import { ArticleApproval } from "@/components/admin/ArticleApproval";
@@ -14,6 +14,7 @@ import { CategoryManagement } from "@/components/admin/CategoryManagement";
 import { ArticleManagement } from "@/components/admin/ArticleManagement";
 import { SettingsPanel } from "@/components/admin/SettingsPanel";
 import { AnalyticsDashboard } from "@/components/admin/AnalyticsDashboard";
+import { AdPerformanceDashboard } from "@/components/admin/AdPerformanceDashboard";
 import { useRealtimeAdmin } from "@/hooks/useRealtimeAdmin";
 const Admin = () => {
   const { user, loading, isAdmin } = useAuth();
@@ -124,6 +125,10 @@ const Admin = () => {
               <Code className="h-4 w-4" />
               HTML
             </TabsTrigger>
+            <TabsTrigger value="ads" className="flex items-center gap-2">
+              <Megaphone className="h-4 w-4" />
+              Ads
+            </TabsTrigger>
             <TabsTrigger value="settings" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               Settings
@@ -156,6 +161,10 @@ const Admin = () => {
 
           <TabsContent value="html" className="mt-6">
             <HTMLSnippets />
+          </TabsContent>
+
+          <TabsContent value="ads" className="mt-6">
+            <AdPerformanceDashboard />
           </TabsContent>
 
           <TabsContent value="settings" className="mt-6">
