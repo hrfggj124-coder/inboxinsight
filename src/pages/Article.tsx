@@ -7,7 +7,7 @@ import { AdSlot } from "@/components/ads/AdSlot";
 import { LikeButton } from "@/components/articles/LikeButton";
 import { CommentSection } from "@/components/articles/CommentSection";
 import { ShareButtons } from "@/components/articles/ShareButtons";
-import { HTMLContent } from "@/components/articles/HTMLContent";
+import { ArticleContentWithAds } from "@/components/articles/ArticleContentWithAds";
 import { HTMLSnippetRenderer } from "@/hooks/useHTMLSnippets";
 import { useArticle } from "@/hooks/useArticles";
 import { useRealtimeComments } from "@/hooks/useRealtimeComments";
@@ -213,16 +213,15 @@ const Article = () => {
             {/* Custom HTML Snippet - Article Top */}
             <HTMLSnippetRenderer location="article_top" className="my-4" />
 
-            {/* Article Body - Supports HTML content */}
-            <HTMLContent content={articleData.content} />
+            {/* Article Body with In-Content Ads */}
+            <ArticleContentWithAds 
+              content={articleData.content} 
+              trusted={isDbArticle}
+              adInterval={4}
+            />
 
             {/* Custom HTML Snippet - Article Bottom */}
             <HTMLSnippetRenderer location="article_bottom" className="my-4" />
-
-            {/* Inline Ad */}
-            <div className="my-8">
-              <AdSlot type="inline" />
-            </div>
 
             {/* Tags */}
             <div className="mt-8 pt-6 border-t border-border">

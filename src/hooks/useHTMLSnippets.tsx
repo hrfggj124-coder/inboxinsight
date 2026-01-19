@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useMemo, useEffect } from "react";
+import { useMemo, useEffect, useRef } from "react";
 import DOMPurify from "dompurify";
 
 interface SnippetResponse {
@@ -8,6 +8,22 @@ interface SnippetResponse {
   scripts: string[];
   inlineScripts?: string[];
 }
+
+// Track ad impression
+const trackImpression = async (location: string) => {
+  try {
+    await supabase.from("ad_impressions").insert({
+      location,
+      event_type: "impression",
+      user_agent: navigator.userAgent,
+      referrer: document.referrer,
+      page_url: window.location.href,
+    });
+  } catch (error) {
+    // Silently fail - tracking should not break the app
+    console.debug("Failed to track impression:", error);
+  }
+};
 
 // Hook to fetch HTML snippets via secure edge function
 // This prevents exposure of raw ad code while still serving sanitized content
@@ -43,6 +59,7 @@ interface HTMLSnippetRendererProps {
 
 export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRendererProps) => {
   const { snippetData, isLoading } = useHTMLSnippets(location);
+  const hasTrackedRef = useRef(false);
 
   // Additional client-side sanitization for defense in depth
   const sanitizedHTML = useMemo(() => {
@@ -128,6 +145,14 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
       });
     };
   }, [snippetData.scripts, snippetData.inlineScripts, location]);
+
+  // Track impression when content is rendered
+  useEffect(() => {
+    if (!hasTrackedRef.current && sanitizedHTML && location !== "head") {
+      hasTrackedRef.current = true;
+      trackImpression(location);
+    }
+  }, [sanitizedHTML, location]);
 
   if (isLoading || (!sanitizedHTML && snippetData.scripts.length === 0)) return null;
 

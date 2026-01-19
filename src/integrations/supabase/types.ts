@@ -14,6 +14,85 @@ export type Database = {
   }
   public: {
     Tables: {
+      ad_impressions: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          location: string
+          page_url: string | null
+          referrer: string | null
+          snippet_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          location: string
+          page_url?: string | null
+          referrer?: string | null
+          snippet_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          location?: string
+          page_url?: string | null
+          referrer?: string | null
+          snippet_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_impressions_snippet_id_fkey"
+            columns: ["snippet_id"]
+            isOneToOne: false
+            referencedRelation: "html_snippets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_performance_daily: {
+        Row: {
+          clicks: number
+          created_at: string
+          date: string
+          id: string
+          impressions: number
+          location: string
+          snippet_id: string | null
+        }
+        Insert: {
+          clicks?: number
+          created_at?: string
+          date: string
+          id?: string
+          impressions?: number
+          location: string
+          snippet_id?: string | null
+        }
+        Update: {
+          clicks?: number
+          created_at?: string
+          date?: string
+          id?: string
+          impressions?: number
+          location?: string
+          snippet_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_performance_daily_snippet_id_fkey"
+            columns: ["snippet_id"]
+            isOneToOne: false
+            referencedRelation: "html_snippets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       analytics_snapshots: {
         Row: {
           created_at: string | null
