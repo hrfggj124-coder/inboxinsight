@@ -156,9 +156,12 @@ const hasUnsafeInlineScripts = (code: string): boolean => {
 };
 
 // Forbidden patterns for security - dangerous inline JavaScript
+// Note: Event handler pattern uses word boundary and specific event names to avoid false positives
+const EVENT_HANDLER_PATTERN = /\s+on(click|dblclick|mousedown|mouseup|mouseover|mouseout|mousemove|mouseenter|mouseleave|keydown|keyup|keypress|focus|blur|change|submit|reset|select|load|unload|error|resize|scroll|contextmenu|copy|cut|paste|drag|dragstart|dragend|dragenter|dragleave|dragover|drop|touchstart|touchmove|touchend|touchcancel)\s*=/i;
+
 const FORBIDDEN_PATTERNS: { pattern: RegExp; message: string }[] = [
   { pattern: /javascript:/i, message: "JavaScript URLs are not allowed for security reasons." },
-  { pattern: /on\w+\s*=/i, message: "Inline event handlers (onclick, onerror, etc.) are not allowed for security reasons." },
+  { pattern: EVENT_HANDLER_PATTERN, message: "Inline event handlers (onclick, onerror, etc.) are not allowed for security reasons." },
   { pattern: /data:text\/html/i, message: "Data URLs with HTML content are not allowed for security reasons." },
   { pattern: /<object\b/i, message: "Object tags are not allowed for security reasons." },
   { pattern: /<embed\b/i, message: "Embed tags are not allowed for security reasons. Use iframe instead." },
