@@ -111,6 +111,9 @@ const extractTrustedScripts = (html: string): { trustedScripts: string[]; inline
   return { trustedScripts, inlineScripts, cleanedHtml };
 };
 
+// More specific event handler pattern to avoid false positives with things like 'format'
+const EVENT_HANDLER_PATTERN = /\s+on(click|dblclick|mousedown|mouseup|mouseover|mouseout|mousemove|mouseenter|mouseleave|keydown|keyup|keypress|focus|blur|change|submit|reset|select|load|unload|error|resize|scroll|contextmenu|copy|cut|paste|drag|dragstart|dragend|dragenter|dragleave|dragover|drop|touchstart|touchmove|touchend|touchcancel)\s*=/gi;
+
 // Basic HTML sanitization for server-side
 const sanitizeHtml = (html: string): string => {
   let cleaned = html;
@@ -118,9 +121,8 @@ const sanitizeHtml = (html: string): string => {
   cleaned = cleaned.replace(/<embed[^>]*>/gi, '');
   cleaned = cleaned.replace(/<form[^>]*>[\s\S]*?<\/form>/gi, '');
   
-  // Remove event handlers
-  cleaned = cleaned.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
-  cleaned = cleaned.replace(/\s+on\w+\s*=\s*[^\s>]*/gi, '');
+  // Remove specific event handlers (not the generic on\w+ pattern that matches format, content, etc.)
+  cleaned = cleaned.replace(EVENT_HANDLER_PATTERN, '');
   
   // Remove javascript: URLs
   cleaned = cleaned.replace(/javascript:/gi, '');
