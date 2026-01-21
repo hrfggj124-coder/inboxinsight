@@ -56,6 +56,11 @@ const SAFE_INLINE_PATTERNS = [
   /^\s*\(adsbygoogle\s*=/,       // Google AdSense
   /^\s*window\.adsbygoogle/,     // Google AdSense push
   /^\s*(var|let|const)?\s*atOptions\s*=/,  // Adsterra with var/let/const
+  /^\s*dataLayer\s*=/,           // Google Tag Manager
+  /^\s*gtag\s*\(/,               // Google Analytics gtag
+  /^\s*fbq\s*\(/,                // Facebook Pixel
+  /^\s*_tfa\s*\./,               // Taboola
+  /^\s*mgid\s*\./,               // MGID
 ];
 
 const isSafeInlineScript = (content: string): boolean => {
@@ -69,7 +74,19 @@ const isSafeInlineScript = (content: string): boolean => {
   
   // Allow simple object assignments (common in ad configs)
   const simpleAdConfig = /^\s*(var|let|const)?\s*\w+\s*=\s*\{[\s\S]*\}\s*;?\s*$/;
-  return simpleAdConfig.test(trimmed);
+  if (simpleAdConfig.test(trimmed)) {
+    return true;
+  }
+  
+  // Allow function invocations that look like ad SDK calls
+  const adSdkCall = /^\s*\w+\s*\.\s*\w+\s*\(/;
+  if (adSdkCall.test(trimmed)) {
+    return true;
+  }
+  
+  // Allow array pushes (common pattern for ads)
+  const arrayPush = /^\s*\(\s*\w+\s*=\s*\w+\s*\|\|\s*\[\s*\]\s*\)\s*\.\s*push\s*\(/;
+  return arrayPush.test(trimmed);
 };
 
 // Extract trusted scripts and safe inline scripts from HTML
