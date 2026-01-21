@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useMemo, useEffect, useRef } from "react";
+import { useMemo, useEffect, useRef, useCallback } from "react";
 import DOMPurify from "dompurify";
 
 interface SnippetResponse {
@@ -9,19 +9,20 @@ interface SnippetResponse {
   inlineScripts?: string[];
 }
 
-// Track ad impression
-const trackImpression = async (location: string) => {
+// Track ad event (impression or click)
+export const trackAdEvent = async (location: string, eventType: 'impression' | 'click', snippetId?: string) => {
   try {
     await supabase.from("ad_impressions").insert({
       location,
-      event_type: "impression",
+      event_type: eventType,
+      snippet_id: snippetId || null,
       user_agent: navigator.userAgent,
       referrer: document.referrer,
       page_url: window.location.href,
     });
   } catch (error) {
     // Silently fail - tracking should not break the app
-    console.debug("Failed to track impression:", error);
+    console.debug(`Failed to track ${eventType}:`, error);
   }
 };
 
@@ -60,8 +61,10 @@ interface HTMLSnippetRendererProps {
 export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRendererProps) => {
   const { snippetData, isLoading } = useHTMLSnippets(location);
   const hasTrackedRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Additional client-side sanitization for defense in depth
+  // Allow data attributes for ad network containers
   const sanitizedHTML = useMemo(() => {
     if (!snippetData.html) return "";
     
@@ -79,12 +82,19 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
         'data-ad-client', 'data-ad-slot', 'data-ad-format', 'data-full-width-responsive',
         'name', 'content'
       ],
-      ALLOW_DATA_ATTR: false,
+      ALLOW_DATA_ATTR: true, // Allow all data attributes for ad network containers
       FORCE_BODY: true,
-      FORBID_TAGS: ['script', 'object', 'embed', 'form', 'input', 'button'],
+      FORBID_TAGS: ['object', 'embed', 'form', 'input', 'button'], // Don't forbid script - handled server-side
       FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur', 'onchange', 'onsubmit'],
     });
   }, [snippetData.html]);
+
+  // Handle click tracking
+  const handleClick = useCallback(() => {
+    if (location !== "head") {
+      trackAdEvent(location, 'click');
+    }
+  }, [location]);
 
   // Dynamically inject trusted scripts and inline scripts into the document
   useEffect(() => {
@@ -148,23 +158,28 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
 
   // Track impression when content is rendered
   useEffect(() => {
-    if (!hasTrackedRef.current && sanitizedHTML && location !== "head") {
+    if (!hasTrackedRef.current && (sanitizedHTML || snippetData.scripts.length > 0) && location !== "head") {
       hasTrackedRef.current = true;
-      trackImpression(location);
+      trackAdEvent(location, 'impression');
     }
-  }, [sanitizedHTML, location]);
+  }, [sanitizedHTML, snippetData.scripts.length, location]);
 
-  if (isLoading || (!sanitizedHTML && snippetData.scripts.length === 0)) return null;
+  if (isLoading) return null;
 
+  // For head location, only scripts matter
   if (location === "head") {
     return null;
   }
 
-  if (!sanitizedHTML) return null;
+  // Show container if we have HTML or scripts (ads may inject content dynamically)
+  const hasContent = sanitizedHTML || snippetData.scripts.length > 0;
+  if (!hasContent) return null;
 
   return (
     <div 
-      className={className}
+      ref={containerRef}
+      className={`ad-container ${className}`}
+      onClick={handleClick}
       dangerouslySetInnerHTML={{ __html: sanitizedHTML }}
     />
   );

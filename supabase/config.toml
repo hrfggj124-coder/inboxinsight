@@ -2,3 +2,6 @@ project_id = "qtmilufnjmwlfgxmwzdm"
 
 [functions.ai-content]
 verify_jwt = true
+
+[functions.aggregate-ad-performance]
+verify_jwt = false
