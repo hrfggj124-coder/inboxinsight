@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from "recharts";
-import { Eye, MousePointerClick, TrendingUp, LayoutGrid, Calendar } from "lucide-react";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
-
+import { Eye, MousePointerClick, TrendingUp, LayoutGrid, Calendar, RefreshCw, Database } from "lucide-react";
+import { format, subDays, startOfDay } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 const COLORS = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
 
 interface PerformanceMetrics {
@@ -33,6 +34,59 @@ interface DailyData {
 export const AdPerformanceDashboard = () => {
   const [dateRange, setDateRange] = useState("7");
   const [selectedLocation, setSelectedLocation] = useState("all");
+  const [isAggregating, setIsAggregating] = useState(false);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const handleAggregateNow = async () => {
+    setIsAggregating(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({
+          title: "Authentication required",
+          description: "Please log in to run aggregation.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/aggregate-ad-performance`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({}),
+        }
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: "Aggregation complete",
+          description: `Aggregated ${result.recordsAggregated || 0} records for ${result.date}.`,
+        });
+        // Refresh data
+        queryClient.invalidateQueries({ queryKey: ["ad-metrics"] });
+        queryClient.invalidateQueries({ queryKey: ["ad-location-data"] });
+        queryClient.invalidateQueries({ queryKey: ["ad-daily-data"] });
+      } else {
+        throw new Error(result.error || "Aggregation failed");
+      }
+    } catch (error) {
+      toast({
+        title: "Aggregation failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAggregating(false);
+    }
+  };
 
   // Fetch overall performance metrics
   const { data: metrics, isLoading: metricsLoading } = useQuery({
@@ -153,23 +207,37 @@ export const AdPerformanceDashboard = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-2xl font-bold">Ad Performance</h2>
           <p className="text-muted-foreground">Track impressions and click-through rates</p>
         </div>
-        <Select value={dateRange} onValueChange={setDateRange}>
-          <SelectTrigger className="w-40">
-            <Calendar className="h-4 w-4 mr-2" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">Last 7 days</SelectItem>
-            <SelectItem value="14">Last 14 days</SelectItem>
-            <SelectItem value="30">Last 30 days</SelectItem>
-            <SelectItem value="90">Last 90 days</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={handleAggregateNow}
+            disabled={isAggregating}
+          >
+            {isAggregating ? (
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Database className="h-4 w-4 mr-2" />
+            )}
+            {isAggregating ? "Aggregating..." : "Aggregate Now"}
+          </Button>
+          <Select value={dateRange} onValueChange={setDateRange}>
+            <SelectTrigger className="w-40">
+              <Calendar className="h-4 w-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7">Last 7 days</SelectItem>
+              <SelectItem value="14">Last 14 days</SelectItem>
+              <SelectItem value="30">Last 30 days</SelectItem>
+              <SelectItem value="90">Last 90 days</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Summary Cards */}
