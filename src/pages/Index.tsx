@@ -1,9 +1,11 @@
 import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { ArticleCard } from "@/components/articles/ArticleCard";
+import { RSSArticleCard } from "@/components/articles/RSSArticleCard";
 import { TrendingSidebar } from "@/components/articles/TrendingSidebar";
 import { AdSlot } from "@/components/ads/AdSlot";
 import { useArticles, useCategories } from "@/hooks/useArticles";
+import { useRSSItems, mergeArticlesWithRSS, type MergedContentItem } from "@/hooks/useRSSItems";
 import { useRealtimeArticles } from "@/hooks/useRealtimeArticles";
 import { articles as staticArticles, getFeaturedArticles, categories as staticCategories } from "@/data/articles";
 import { Link } from "react-router-dom";
@@ -25,19 +27,24 @@ const Index = () => {
     featured: true, 
     limit: 3 
   });
+  
+  // Fetch RSS items for the Latest News section
+  const { data: rssItems, isLoading: rssLoading } = useRSSItems({ 
+    limit: 10,
+    excludeImported: true 
+  });
 
   // Use DB articles if available, otherwise fall back to static
   const hasDbArticles = dbArticles && dbArticles.length > 0;
   const hasDbCategories = dbCategories && dbCategories.length > 0;
 
   // Normalize articles for display
-  const normalizedArticles = hasDbArticles 
+  const normalizedArticles: MergedContentItem[] = hasDbArticles 
     ? dbArticles.map(article => ({
         id: article.id,
         title: article.title,
         slug: article.slug,
         excerpt: article.excerpt || "",
-        content: article.content,
         category: article.category?.name || "Uncategorized",
         categorySlug: article.category?.slug || "uncategorized",
         author: article.author?.display_name || "Staff Writer",
@@ -47,17 +54,24 @@ const Index = () => {
         featured: article.is_featured || false,
         trending: (article.views_count || 0) > 100,
         tags: article.seo_keywords || [],
+        isRSS: false,
       }))
-    : staticArticles;
+    : staticArticles.map(a => ({ 
+        ...a, 
+        featured: a.featured || false,
+        trending: a.trending || false,
+        isRSS: false 
+      }));
 
   const categories = hasDbCategories 
     ? dbCategories.map(cat => ({
+        id: cat.id,
         name: cat.name,
         slug: cat.slug,
         description: cat.description || "",
         color: cat.color || cat.slug,
       }))
-    : staticCategories;
+    : staticCategories.map(c => ({ ...c, id: c.slug }));
 
   // Get featured articles
   const featured = hasDbArticles && featuredArticles && featuredArticles.length > 0
@@ -66,7 +80,6 @@ const Index = () => {
         title: article.title,
         slug: article.slug,
         excerpt: article.excerpt || "",
-        content: article.content,
         category: article.category?.name || "Uncategorized",
         categorySlug: article.category?.slug || "uncategorized",
         author: article.author?.display_name || "Staff Writer",
@@ -76,14 +89,35 @@ const Index = () => {
         featured: true,
         trending: (article.views_count || 0) > 100,
         tags: article.seo_keywords || [],
+        isRSS: false,
       }))
-    : getFeaturedArticles();
+    : getFeaturedArticles().map(a => ({ 
+        ...a, 
+        featured: true,
+        trending: a.trending || false,
+        isRSS: false 
+      }));
+
+  // Merge articles with RSS items for the Latest News section
+  const mergedContent = mergeArticlesWithRSS(
+    normalizedArticles,
+    rssItems || [],
+    categories
+  );
 
   const mainFeatured = featured[0];
   const sideFeatured = featured.slice(1, 3);
-  const latestArticles = normalizedArticles.slice(0, 12);
+  const latestContent = mergedContent.slice(0, 16); // Increased to accommodate RSS
 
-  const isLoading = articlesLoading || categoriesLoading;
+  const isLoading = articlesLoading || categoriesLoading || rssLoading;
+
+  // Render content item (article or RSS)
+  const renderContentItem = (item: MergedContentItem, variant?: "horizontal") => {
+    if (item.isRSS) {
+      return <RSSArticleCard key={item.id} item={item} variant={variant} />;
+    }
+    return <ArticleCard key={item.id} article={item} variant={variant} />;
+  };
 
   return (
     <Layout>
@@ -157,14 +191,26 @@ const Index = () => {
             </div>
             <div className="overflow-hidden">
               <div className="flex gap-8 animate-[marquee_30s_linear_infinite] whitespace-nowrap">
-                {normalizedArticles.slice(0, 5).map((article) => (
-                  <Link
-                    key={article.id}
-                    to={`/article/${article.slug}`}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {article.title}
-                  </Link>
+                {mergedContent.slice(0, 5).map((item) => (
+                  item.isRSS ? (
+                    <a
+                      key={item.id}
+                      href={item.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {item.title}
+                    </a>
+                  ) : (
+                    <Link
+                      key={item.id}
+                      to={`/article/${item.slug}`}
+                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {item.title}
+                    </Link>
+                  )
                 ))}
               </div>
             </div>
@@ -200,9 +246,7 @@ const Index = () => {
             ) : (
               <>
                 <div className="grid sm:grid-cols-2 gap-6">
-                  {latestArticles.slice(0, 4).map((article) => (
-                    <ArticleCard key={article.id} article={article} />
-                  ))}
+                  {latestContent.slice(0, 4).map((item) => renderContentItem(item))}
                 </div>
 
                 {/* Inline Ad */}
@@ -211,16 +255,12 @@ const Index = () => {
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-6">
-                  {latestArticles.slice(4, 8).map((article) => (
-                    <ArticleCard key={article.id} article={article} />
-                  ))}
+                  {latestContent.slice(4, 8).map((item) => renderContentItem(item))}
                 </div>
 
                 {/* More horizontal articles */}
                 <div className="mt-8 space-y-6">
-                  {latestArticles.slice(8, 12).map((article) => (
-                    <ArticleCard key={article.id} article={article} variant="horizontal" />
-                  ))}
+                  {latestContent.slice(8, 12).map((item) => renderContentItem(item, "horizontal"))}
                 </div>
               </>
             )}
