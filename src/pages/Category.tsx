@@ -2,9 +2,11 @@ import { useParams, Link } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { ArticleCard } from "@/components/articles/ArticleCard";
+import { RSSArticleCard } from "@/components/articles/RSSArticleCard";
 import { TrendingSidebar } from "@/components/articles/TrendingSidebar";
 import { AdSlot } from "@/components/ads/AdSlot";
 import { useArticles, useCategories } from "@/hooks/useArticles";
+import { useRSSItems, mergeArticlesWithRSS, type MergedContentItem } from "@/hooks/useRSSItems";
 import { getArticlesByCategory, categories as staticCategories } from "@/data/articles";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +22,13 @@ const Category = () => {
     categorySlug: slug,
     limit: 50 
   });
+  
+  // Fetch RSS items for this category
+  const { data: rssItems, isLoading: rssLoading } = useRSSItems({
+    categorySlug: slug,
+    limit: 20,
+    excludeImported: true,
+  });
 
   // Use DB data if available
   const hasDbCategories = dbCategories && dbCategories.length > 0;
@@ -32,21 +41,21 @@ const Category = () => {
 
   const categories = hasDbCategories 
     ? dbCategories.map(cat => ({
+        id: cat.id,
         name: cat.name,
         slug: cat.slug,
         description: cat.description || "",
         color: cat.color || cat.slug,
       }))
-    : staticCategories;
+    : staticCategories.map(c => ({ ...c, id: c.slug }));
 
   // Normalize articles
-  const articles = hasDbArticles 
+  const normalizedArticles: MergedContentItem[] = hasDbArticles 
     ? dbArticles.map(article => ({
         id: article.id,
         title: article.title,
         slug: article.slug,
         excerpt: article.excerpt || "",
-        content: article.content,
         category: article.category?.name || "Uncategorized",
         categorySlug: article.category?.slug || "uncategorized",
         author: article.author?.display_name || "Staff Writer",
@@ -56,10 +65,31 @@ const Category = () => {
         featured: article.is_featured || false,
         trending: (article.views_count || 0) > 100,
         tags: article.seo_keywords || [],
+        isRSS: false,
       }))
-    : getArticlesByCategory(slug || "");
+    : getArticlesByCategory(slug || "").map(a => ({ 
+        ...a, 
+        featured: a.featured || false,
+        trending: a.trending || false,
+        isRSS: false 
+      }));
 
-  const isLoading = categoriesLoading || articlesLoading;
+  // Merge articles with RSS items for this category
+  const mergedContent = mergeArticlesWithRSS(
+    normalizedArticles,
+    rssItems || [],
+    categories
+  );
+
+  const isLoading = categoriesLoading || articlesLoading || rssLoading;
+
+  // Render content item (article or RSS)
+  const renderContentItem = (item: MergedContentItem, variant?: "horizontal") => {
+    if (item.isRSS) {
+      return <RSSArticleCard key={item.id} item={item} variant={variant} />;
+    }
+    return <ArticleCard key={item.id} article={item} variant={variant} />;
+  };
 
   if (!isLoading && !category) {
     return (
@@ -112,6 +142,11 @@ const Category = () => {
                 <h1 className="font-display text-3xl md:text-4xl font-bold">{category?.name}</h1>
               </div>
               <p className="text-lg text-muted-foreground max-w-2xl">{category?.description}</p>
+              {rssItems && rssItems.length > 0 && (
+                <p className="text-sm text-primary/70 mt-2">
+                  Including {rssItems.length} articles from RSS feeds
+                </p>
+              )}
             </>
           )}
         </div>
@@ -147,24 +182,20 @@ const Category = () => {
                   </div>
                 ))}
               </div>
-            ) : articles.length > 0 ? (
+            ) : mergedContent.length > 0 ? (
               <>
                 <div className="grid sm:grid-cols-2 gap-6">
-                  {articles.slice(0, 4).map((article) => (
-                    <ArticleCard key={article.id} article={article} />
-                  ))}
+                  {mergedContent.slice(0, 4).map((item) => renderContentItem(item))}
                 </div>
 
-                {articles.length > 4 && (
+                {mergedContent.length > 4 && (
                   <>
                     <div className="my-8">
                       <AdSlot type="inline" />
                     </div>
 
                     <div className="space-y-6">
-                      {articles.slice(4).map((article) => (
-                        <ArticleCard key={article.id} article={article} variant="horizontal" />
-                      ))}
+                      {mergedContent.slice(4).map((item) => renderContentItem(item, "horizontal"))}
                     </div>
                   </>
                 )}
