@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { ArticleCard } from "@/components/articles/ArticleCard";
 import { RSSArticleCard } from "@/components/articles/RSSArticleCard";
 import { TrendingSidebar } from "@/components/articles/TrendingSidebar";
+import { ContentFilter, type ContentFilterType } from "@/components/articles/ContentFilter";
 import { AdSlot } from "@/components/ads/AdSlot";
 import { useArticles, useCategories } from "@/hooks/useArticles";
 import { useRSSItems, mergeArticlesWithRSS, type MergedContentItem } from "@/hooks/useRSSItems";
@@ -14,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const Category = () => {
   const { slug } = useParams();
+  const [contentFilter, setContentFilter] = useState<ContentFilterType>("all");
   
   // Fetch from database
   const { data: dbCategories, isLoading: categoriesLoading } = useCategories();
@@ -81,6 +84,21 @@ const Category = () => {
     categories
   );
 
+  // Calculate counts for filter
+  const contentCounts = {
+    all: mergedContent.length,
+    articles: mergedContent.filter(item => !item.isRSS).length,
+    rss: mergedContent.filter(item => item.isRSS).length,
+  };
+
+  // Filter content based on selected filter
+  const filteredContent = mergedContent.filter(item => {
+    if (contentFilter === "all") return true;
+    if (contentFilter === "articles") return !item.isRSS;
+    if (contentFilter === "rss") return item.isRSS;
+    return true;
+  });
+
   const isLoading = categoriesLoading || articlesLoading || rssLoading;
 
   // Render content item (article or RSS)
@@ -90,6 +108,9 @@ const Category = () => {
     }
     return <ArticleCard key={item.id} article={item} variant={variant} />;
   };
+
+  // Use filtered content for display
+  const displayContent = filteredContent;
 
   if (!isLoading && !category) {
     return (
@@ -142,11 +163,11 @@ const Category = () => {
                 <h1 className="font-display text-3xl md:text-4xl font-bold">{category?.name}</h1>
               </div>
               <p className="text-lg text-muted-foreground max-w-2xl">{category?.description}</p>
-              {rssItems && rssItems.length > 0 && (
-                <p className="text-sm text-primary/70 mt-2">
-                  Including {rssItems.length} articles from RSS feeds
-                </p>
-              )}
+              
+              {/* Content Filter */}
+              <div className="mt-4">
+                <ContentFilter value={contentFilter} onChange={setContentFilter} counts={contentCounts} />
+              </div>
             </>
           )}
         </div>
@@ -182,27 +203,31 @@ const Category = () => {
                   </div>
                 ))}
               </div>
-            ) : mergedContent.length > 0 ? (
+            ) : displayContent.length > 0 ? (
               <>
                 <div className="grid sm:grid-cols-2 gap-6">
-                  {mergedContent.slice(0, 4).map((item) => renderContentItem(item))}
+                  {displayContent.slice(0, 4).map((item) => renderContentItem(item))}
                 </div>
 
-                {mergedContent.length > 4 && (
+                {displayContent.length > 4 && (
                   <>
                     <div className="my-8">
                       <AdSlot type="inline" />
                     </div>
 
                     <div className="space-y-6">
-                      {mergedContent.slice(4).map((item) => renderContentItem(item, "horizontal"))}
+                      {displayContent.slice(4).map((item) => renderContentItem(item, "horizontal"))}
                     </div>
                   </>
                 )}
               </>
             ) : (
               <div className="text-center py-12">
-                <p className="text-muted-foreground">No articles in this category yet.</p>
+                <p className="text-muted-foreground">
+                  {contentFilter === "all" 
+                    ? "No articles in this category yet." 
+                    : `No ${contentFilter === "articles" ? "articles" : "RSS feeds"} in this category.`}
+                </p>
               </div>
             )}
           </div>
