@@ -571,6 +571,7 @@ export type Database = {
           feed_id: string
           guid: string
           id: string
+          image_url: string | null
           imported_article_id: string | null
           is_imported: boolean | null
           link: string
@@ -583,6 +584,7 @@ export type Database = {
           feed_id: string
           guid: string
           id?: string
+          image_url?: string | null
           imported_article_id?: string | null
           is_imported?: boolean | null
           link: string
@@ -595,6 +597,7 @@ export type Database = {
           feed_id?: string
           guid?: string
           id?: string
+          image_url?: string | null
           imported_article_id?: string | null
           is_imported?: boolean | null
           link?: string

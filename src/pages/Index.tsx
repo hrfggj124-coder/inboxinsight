@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { SEOHead } from "@/components/seo/SEOHead";
 import { ArticleCard } from "@/components/articles/ArticleCard";
 import { RSSArticleCard } from "@/components/articles/RSSArticleCard";
 import { TrendingSidebar } from "@/components/articles/TrendingSidebar";
+import { ContentFilter, type ContentFilterType } from "@/components/articles/ContentFilter";
 import { AdSlot } from "@/components/ads/AdSlot";
 import { useArticles, useCategories } from "@/hooks/useArticles";
 import { useRSSItems, mergeArticlesWithRSS, type MergedContentItem } from "@/hooks/useRSSItems";
@@ -13,6 +15,8 @@ import { ArrowRight, Zap } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const Index = () => {
+  const [contentFilter, setContentFilter] = useState<ContentFilterType>("all");
+  
   // Enable realtime updates for articles
   useRealtimeArticles();
   
@@ -105,9 +109,17 @@ const Index = () => {
     categories
   );
 
+  // Filter content based on selected filter
+  const filteredContent = mergedContent.filter(item => {
+    if (contentFilter === "all") return true;
+    if (contentFilter === "articles") return !item.isRSS;
+    if (contentFilter === "rss") return item.isRSS;
+    return true;
+  });
+
   const mainFeatured = featured[0];
   const sideFeatured = featured.slice(1, 3);
-  const latestContent = mergedContent.slice(0, 16); // Increased to accommodate RSS
+  const latestContent = filteredContent.slice(0, 16); // Increased to accommodate RSS
 
   const isLoading = articlesLoading || categoriesLoading || rssLoading;
 
@@ -224,7 +236,10 @@ const Index = () => {
           {/* Articles Grid */}
           <div className="lg:col-span-2">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="font-display text-2xl font-bold">Latest News</h2>
+              <div className="flex items-center gap-4">
+                <h2 className="font-display text-2xl font-bold">Latest News</h2>
+                <ContentFilter value={contentFilter} onChange={setContentFilter} />
+              </div>
               <Link to="/categories" className="text-sm text-primary hover:text-primary/80 flex items-center gap-1">
                 View all <ArrowRight className="h-4 w-4" />
               </Link>

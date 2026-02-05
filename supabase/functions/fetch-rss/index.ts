@@ -24,7 +24,37 @@ interface RSSItem {
   guid: string;
   description: string | null;
   pubDate: string | null;
+  imageUrl: string | null;
 }
+
+// Extract image URL from various RSS formats
+const extractImageUrl = (itemXml: string): string | null => {
+  // Try media:content
+  const mediaContentMatch = itemXml.match(/<media:content[^>]*url=["']([^"']+)["'][^>]*>/i);
+  if (mediaContentMatch) return mediaContentMatch[1];
+  
+  // Try media:thumbnail
+  const mediaThumbnailMatch = itemXml.match(/<media:thumbnail[^>]*url=["']([^"']+)["'][^>]*>/i);
+  if (mediaThumbnailMatch) return mediaThumbnailMatch[1];
+  
+  // Try enclosure (commonly used for images)
+  const enclosureMatch = itemXml.match(/<enclosure[^>]*url=["']([^"']+)["'][^>]*type=["']image[^"']*["'][^>]*>/i);
+  if (enclosureMatch) return enclosureMatch[1];
+  
+  // Try enclosure without type check
+  const enclosureAnyMatch = itemXml.match(/<enclosure[^>]*url=["']([^"']+\.(jpg|jpeg|png|gif|webp))[^"']*["'][^>]*>/i);
+  if (enclosureAnyMatch) return enclosureAnyMatch[1];
+  
+  // Try image tag
+  const imageTagMatch = itemXml.match(/<image>[\s\S]*?<url>([^<]+)<\/url>[\s\S]*?<\/image>/i);
+  if (imageTagMatch) return imageTagMatch[1].trim();
+  
+  // Try img tag in description/content
+  const imgTagMatch = itemXml.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/i);
+  if (imgTagMatch) return imgTagMatch[1];
+  
+  return null;
+};
 
 // Parse RSS feed XML
 const parseRSSFeed = (xmlText: string): RSSItem[] => {
@@ -48,6 +78,7 @@ const parseRSSFeed = (xmlText: string): RSSItem[] => {
     const guid = getTagContent('guid') || link || crypto.randomUUID();
     const description = getTagContent('description');
     const pubDate = getTagContent('pubDate');
+    const imageUrl = extractImageUrl(itemXml);
     
     if (title && link) {
       items.push({
@@ -56,6 +87,7 @@ const parseRSSFeed = (xmlText: string): RSSItem[] => {
         guid,
         description,
         pubDate,
+        imageUrl,
       });
     }
   }
@@ -272,6 +304,7 @@ const handler = async (req: Request): Promise<Response> => {
                 guid: item.guid,
                 description: item.description,
                 pub_date: item.pubDate ? new Date(item.pubDate).toISOString() : null,
+                image_url: item.imageUrl,
               }))
             );
 

@@ -8,6 +8,7 @@ interface RSSItemWithFeed {
   link: string;
   description: string | null;
   pub_date: string | null;
+  image_url: string | null;
   feed: {
     id: string;
     name: string;
@@ -21,6 +22,7 @@ interface NormalizedRSSItem {
   link: string;
   description: string | null;
   pubDate: string | null;
+  imageUrl: string | null;
   feedName: string;
   categoryId: string | null;
   isRSS: true;
@@ -59,6 +61,7 @@ export const useRSSItems = (options?: {
           link,
           description,
           pub_date,
+          image_url,
           feed:feed_id (
             id,
             name,
@@ -96,6 +99,7 @@ export const useRSSItems = (options?: {
         link: item.link,
         description: item.description,
         pubDate: item.pub_date,
+        imageUrl: item.image_url,
         feedName: item.feed?.name || 'External Source',
         categoryId: item.feed?.category_id || null,
         isRSS: true as const,
@@ -142,7 +146,7 @@ export const mergeArticlesWithRSS = (
       author: item.feedName,
       publishedAt: item.pubDate || new Date().toISOString(),
       readTime: 3,
-      image: '/placeholder.svg',
+      image: item.imageUrl || '/placeholder.svg',
       featured: false,
       trending: false,
       tags: [],
