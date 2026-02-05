@@ -6,9 +6,14 @@ export type ContentFilterType = "all" | "articles" | "rss";
 interface ContentFilterProps {
   value: ContentFilterType;
   onChange: (value: ContentFilterType) => void;
+  counts?: {
+    all: number;
+    articles: number;
+    rss: number;
+  };
 }
 
-export const ContentFilter = ({ value, onChange }: ContentFilterProps) => {
+export const ContentFilter = ({ value, onChange, counts }: ContentFilterProps) => {
   return (
     <ToggleGroup 
       type="single" 
@@ -22,7 +27,7 @@ export const ContentFilter = ({ value, onChange }: ContentFilterProps) => {
         className="gap-1.5 text-xs data-[state=on]:bg-background data-[state=on]:shadow-sm"
       >
         <LayoutGrid className="h-3.5 w-3.5" />
-        All
+        All{counts ? ` (${counts.all})` : ''}
       </ToggleGroupItem>
       <ToggleGroupItem 
         value="articles" 
@@ -30,7 +35,7 @@ export const ContentFilter = ({ value, onChange }: ContentFilterProps) => {
         className="gap-1.5 text-xs data-[state=on]:bg-background data-[state=on]:shadow-sm"
       >
         <FileText className="h-3.5 w-3.5" />
-        Articles
+        Articles{counts ? ` (${counts.articles})` : ''}
       </ToggleGroupItem>
       <ToggleGroupItem 
         value="rss" 
@@ -38,7 +43,7 @@ export const ContentFilter = ({ value, onChange }: ContentFilterProps) => {
         className="gap-1.5 text-xs data-[state=on]:bg-background data-[state=on]:shadow-sm"
       >
         <Rss className="h-3.5 w-3.5" />
-        RSS
+        RSS{counts ? ` (${counts.rss})` : ''}
       </ToggleGroupItem>
     </ToggleGroup>
   );

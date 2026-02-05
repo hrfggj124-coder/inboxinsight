@@ -109,6 +109,13 @@ const Index = () => {
     categories
   );
 
+  // Calculate counts for filter
+  const contentCounts = {
+    all: mergedContent.length,
+    articles: mergedContent.filter(item => !item.isRSS).length,
+    rss: mergedContent.filter(item => item.isRSS).length,
+  };
+
   // Filter content based on selected filter
   const filteredContent = mergedContent.filter(item => {
     if (contentFilter === "all") return true;
@@ -119,7 +126,7 @@ const Index = () => {
 
   const mainFeatured = featured[0];
   const sideFeatured = featured.slice(1, 3);
-  const latestContent = filteredContent.slice(0, 16); // Increased to accommodate RSS
+  const latestContent = filteredContent.slice(0, 16);
 
   const isLoading = articlesLoading || categoriesLoading || rssLoading;
 
@@ -236,9 +243,9 @@ const Index = () => {
           {/* Articles Grid */}
           <div className="lg:col-span-2">
             <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 flex-wrap">
                 <h2 className="font-display text-2xl font-bold">Latest News</h2>
-                <ContentFilter value={contentFilter} onChange={setContentFilter} />
+                <ContentFilter value={contentFilter} onChange={setContentFilter} counts={contentCounts} />
               </div>
               <Link to="/categories" className="text-sm text-primary hover:text-primary/80 flex items-center gap-1">
                 View all <ArrowRight className="h-4 w-4" />
