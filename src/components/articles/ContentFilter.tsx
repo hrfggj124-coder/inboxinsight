@@ -1,5 +1,6 @@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { FileText, Rss, LayoutGrid } from "lucide-react";
+import { FileText, Rss, LayoutGrid, Loader2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export type ContentFilterType = "all" | "articles" | "rss";
 
@@ -11,9 +12,20 @@ interface ContentFilterProps {
     articles: number;
     rss: number;
   };
+  isLoading?: boolean;
 }
 
-export const ContentFilter = ({ value, onChange, counts }: ContentFilterProps) => {
+export const ContentFilter = ({ value, onChange, counts, isLoading = false }: ContentFilterProps) => {
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg">
+        <Skeleton className="h-8 w-16 rounded-md" />
+        <Skeleton className="h-8 w-20 rounded-md" />
+        <Skeleton className="h-8 w-16 rounded-md" />
+      </div>
+    );
+  }
+
   return (
     <ToggleGroup 
       type="single" 
