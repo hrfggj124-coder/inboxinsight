@@ -60,45 +60,71 @@ const extractImageUrl = (itemXml: string): string | null => {
   return null;
 };
 
-// Fetch image from the article page as fallback
+// Fetch image from the article page using Firecrawl API
 const fetchImageFromPage = async (link: string): Promise<string | null> => {
+  const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
+  
+  if (!firecrawlApiKey) {
+    console.log('FIRECRAWL_API_KEY not configured, skipping page image extraction');
+    return null;
+  }
+
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    console.log(`Fetching image from page via Firecrawl: ${link}`);
     
-    const response = await fetch(link, {
+    const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
       headers: {
-        'User-Agent': 'TechPulse RSS Reader/1.0 (Image Extractor)',
-        'Accept': 'text/html',
+        'Authorization': `Bearer ${firecrawlApiKey}`,
+        'Content-Type': 'application/json',
       },
-      signal: controller.signal,
+      body: JSON.stringify({
+        url: link,
+        formats: ['html'],
+        onlyMainContent: false,
+        waitFor: 1000,
+      }),
     });
+
+    if (!response.ok) {
+      console.log(`Firecrawl request failed: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    const metadata = data.data?.metadata || data.metadata;
     
-    clearTimeout(timeoutId);
+    // Try og:image from metadata (Firecrawl extracts this)
+    if (metadata?.ogImage) {
+      console.log(`Found og:image: ${metadata.ogImage}`);
+      return metadata.ogImage;
+    }
     
-    if (!response.ok) return null;
+    // Try twitter:image
+    if (metadata?.twitterImage) {
+      console.log(`Found twitter:image: ${metadata.twitterImage}`);
+      return metadata.twitterImage;
+    }
     
-    const html = await response.text();
+    // Try to extract from HTML if available
+    const html = data.data?.html || data.html;
+    if (html) {
+      // Try Open Graph image
+      const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
+      if (ogImageMatch) return ogImageMatch[1];
+      
+      // Try alternate og:image format
+      const ogImageAltMatch = html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+      if (ogImageAltMatch) return ogImageAltMatch[1];
+      
+      // Try Twitter card image
+      const twitterImageMatch = html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i);
+      if (twitterImageMatch) return twitterImageMatch[1];
+    }
     
-    // Try Open Graph image (most reliable)
-    const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
-    if (ogImageMatch) return ogImageMatch[1];
-    
-    // Try Twitter card image
-    const twitterImageMatch = html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i);
-    if (twitterImageMatch) return twitterImageMatch[1];
-    
-    // Try first large image in article
-    const articleImageMatch = html.match(/<article[\s\S]*?<img[^>]+src=["']([^"']+)["'][^>]*>/i);
-    if (articleImageMatch) return articleImageMatch[1];
-    
-    // Try main content image
-    const mainImageMatch = html.match(/<main[\s\S]*?<img[^>]+src=["']([^"']+)["'][^>]*>/i);
-    if (mainImageMatch) return mainImageMatch[1];
-    
+    console.log(`No image found for ${link}`);
     return null;
   } catch (error) {
-    // Silently fail - this is a fallback
     console.log(`Failed to fetch image from ${link}: ${error}`);
     return null;
   }
