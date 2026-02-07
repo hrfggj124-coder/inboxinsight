@@ -53,7 +53,55 @@ const extractImageUrl = (itemXml: string): string | null => {
   const imgTagMatch = itemXml.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/i);
   if (imgTagMatch) return imgTagMatch[1];
   
+  // Try content:encoded for images
+  const contentEncodedMatch = itemXml.match(/<content:encoded>[\s\S]*?<img[^>]+src=["']([^"']+)["'][^>]*>[\s\S]*?<\/content:encoded>/i);
+  if (contentEncodedMatch) return contentEncodedMatch[1];
+  
   return null;
+};
+
+// Fetch image from the article page as fallback
+const fetchImageFromPage = async (link: string): Promise<string | null> => {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    
+    const response = await fetch(link, {
+      headers: {
+        'User-Agent': 'TechPulse RSS Reader/1.0 (Image Extractor)',
+        'Accept': 'text/html',
+      },
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) return null;
+    
+    const html = await response.text();
+    
+    // Try Open Graph image (most reliable)
+    const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
+    if (ogImageMatch) return ogImageMatch[1];
+    
+    // Try Twitter card image
+    const twitterImageMatch = html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i);
+    if (twitterImageMatch) return twitterImageMatch[1];
+    
+    // Try first large image in article
+    const articleImageMatch = html.match(/<article[\s\S]*?<img[^>]+src=["']([^"']+)["'][^>]*>/i);
+    if (articleImageMatch) return articleImageMatch[1];
+    
+    // Try main content image
+    const mainImageMatch = html.match(/<main[\s\S]*?<img[^>]+src=["']([^"']+)["'][^>]*>/i);
+    if (mainImageMatch) return mainImageMatch[1];
+    
+    return null;
+  } catch (error) {
+    // Silently fail - this is a fallback
+    console.log(`Failed to fetch image from ${link}: ${error}`);
+    return null;
+  }
 };
 
 // Parse RSS feed XML
@@ -293,11 +341,27 @@ const handler = async (req: Request): Promise<Response> => {
         const newItems = items.filter(item => !existingGuids.has(item.guid));
 
         if (newItems.length > 0) {
+          // Fetch images from article pages for items without images (limit to 3 to avoid timeout)
+          const itemsWithImages = await Promise.all(
+            newItems.slice(0, 10).map(async (item, index) => {
+              if (item.imageUrl) return item;
+              // Only fetch from page for first 3 items to avoid timeout
+              if (index < 3) {
+                const pageImage = await fetchImageFromPage(item.link);
+                return { ...item, imageUrl: pageImage };
+              }
+              return item;
+            })
+          );
+          
+          // Combine items with fetched images and remaining items
+          const allItems = [...itemsWithImages, ...newItems.slice(10)];
+          
           // Insert new items
           const { error: insertError } = await adminClient
             .from('rss_items')
             .insert(
-              newItems.map(item => ({
+              allItems.map(item => ({
                 feed_id: feed.id,
                 title: item.title,
                 link: item.link,
@@ -312,8 +376,8 @@ const handler = async (req: Request): Promise<Response> => {
             console.error(`Error inserting items for ${feed.name}:`, insertError);
             results.push({ feedName: feed.name, itemsAdded: 0, error: insertError.message });
           } else {
-            totalItemsAdded += newItems.length;
-            results.push({ feedName: feed.name, itemsAdded: newItems.length });
+            totalItemsAdded += allItems.length;
+            results.push({ feedName: feed.name, itemsAdded: allItems.length });
           }
         } else {
           results.push({ feedName: feed.name, itemsAdded: 0 });

@@ -245,7 +245,7 @@ const Index = () => {
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-4 flex-wrap">
                 <h2 className="font-display text-2xl font-bold">Latest News</h2>
-                <ContentFilter value={contentFilter} onChange={setContentFilter} counts={contentCounts} />
+                <ContentFilter value={contentFilter} onChange={setContentFilter} counts={contentCounts} isLoading={isLoading} />
               </div>
               <Link to="/categories" className="text-sm text-primary hover:text-primary/80 flex items-center gap-1">
                 View all <ArrowRight className="h-4 w-4" />

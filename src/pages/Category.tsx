@@ -166,7 +166,7 @@ const Category = () => {
               
               {/* Content Filter */}
               <div className="mt-4">
-                <ContentFilter value={contentFilter} onChange={setContentFilter} counts={contentCounts} />
+                <ContentFilter value={contentFilter} onChange={setContentFilter} counts={contentCounts} isLoading={isLoading} />
               </div>
             </>
           )}
