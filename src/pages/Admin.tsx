@@ -15,6 +15,7 @@ import { ArticleManagement } from "@/components/admin/ArticleManagement";
 import { SettingsPanel } from "@/components/admin/SettingsPanel";
 import { AnalyticsDashboard } from "@/components/admin/AnalyticsDashboard";
 import { AdPerformanceDashboard } from "@/components/admin/AdPerformanceDashboard";
+import { AdDebugPanel } from "@/components/admin/AdDebugPanel";
 import { useRealtimeAdmin } from "@/hooks/useRealtimeAdmin";
 const Admin = () => {
   const { user, loading, isAdmin } = useAuth();
@@ -164,7 +165,18 @@ const Admin = () => {
           </TabsContent>
 
           <TabsContent value="ads" className="mt-6">
-            <AdPerformanceDashboard />
+            <Tabs defaultValue="performance" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="performance">Performance</TabsTrigger>
+                <TabsTrigger value="debug">Debug</TabsTrigger>
+              </TabsList>
+              <TabsContent value="performance">
+                <AdPerformanceDashboard />
+              </TabsContent>
+              <TabsContent value="debug">
+                <AdDebugPanel />
+              </TabsContent>
+            </Tabs>
           </TabsContent>
 
           <TabsContent value="settings" className="mt-6">
