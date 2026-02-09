@@ -105,7 +105,7 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
     
     const scriptElements: HTMLScriptElement[] = [];
     
-    // First inject inline scripts (config variables)
+    // First inject inline scripts (config variables like atOptions)
     if (hasInlineScripts) {
       snippetData.inlineScripts!.forEach((code, index) => {
         const scriptId = `html-snippet-inline-${location}-${index}`;
@@ -117,8 +117,12 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
         script.textContent = code;
         script.dataset.htmlSnippet = 'true';
         
+        // For non-head locations, insert inline scripts near the container
         if (location === 'head') {
           document.head.appendChild(script);
+        } else if (containerRef.current) {
+          // Insert before the container so config is available when external script runs
+          containerRef.current.parentNode?.insertBefore(script, containerRef.current);
         } else {
           document.body.appendChild(script);
         }
@@ -127,27 +131,33 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
       });
     }
     
-    // Then inject external scripts
-    snippetData.scripts.forEach((src) => {
-      // Check if script is already loaded
-      const existingScript = document.querySelector(`script[src="${src}"]`);
-      if (existingScript) return;
-      
-      const script = document.createElement('script');
-      script.src = src;
-      script.async = true;
-      script.dataset.htmlSnippet = 'true';
-      
-      if (location === 'head') {
-        document.head.appendChild(script);
-      } else {
-        document.body.appendChild(script);
-      }
-      
-      scriptElements.push(script);
-    });
+    // Then inject external scripts (with a small delay to ensure inline configs are set)
+    const scriptTimeout = setTimeout(() => {
+      snippetData.scripts.forEach((src) => {
+        // Check if script is already loaded
+        const existingScript = document.querySelector(`script[src="${src}"]`);
+        if (existingScript) return;
+        
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.dataset.htmlSnippet = 'true';
+        
+        if (location === 'head') {
+          document.head.appendChild(script);
+        } else if (containerRef.current) {
+          // Insert after the container div so the script can find it
+          containerRef.current.parentNode?.insertBefore(script, containerRef.current.nextSibling);
+        } else {
+          document.body.appendChild(script);
+        }
+        
+        scriptElements.push(script);
+      });
+    }, 50); // Small delay ensures inline config scripts execute first
     
     return () => {
+      clearTimeout(scriptTimeout);
       scriptElements.forEach(script => {
         if (script.parentNode) {
           script.parentNode.removeChild(script);
