@@ -133,24 +133,31 @@ const hasUnsafeInlineScripts = (code: string): boolean => {
     // Skip empty scripts
     if (scriptContent.length === 0) continue;
     
-    // Allow common ad network configuration patterns (atOptions, adsbygoogle, etc.)
+    // Allow common ad network configuration patterns
     const safePatterns = [
-      /^\s*atOptions\s*=/,           // Adsterra config
-      /^\s*\(adsbygoogle\s*=/,       // Google AdSense
-      /^\s*window\.adsbygoogle/,     // Google AdSense push
-      /^\s*var\s+atOptions\s*=/,     // Adsterra with var
-      /^\s*let\s+atOptions\s*=/,     // Adsterra with let
-      /^\s*const\s+atOptions\s*=/,   // Adsterra with const
+      /^\s*(var\s+|let\s+|const\s+)?atOptions\s*=/,   // Adsterra config (any declaration style)
+      /^\s*\(adsbygoogle\s*=/,                          // Google AdSense
+      /^\s*window\.adsbygoogle/,                         // Google AdSense push
+      /^\s*\(?\s*adsbygoogle\s*=\s*window/,             // AdSense push variant
+      /^\s*dataLayer\s*=/,                               // GTM
+      /^\s*window\.dataLayer/,                           // GTM push
+      /^\s*gtag\s*\(/,                                   // Google Analytics
+      /^\s*fbq\s*\(/,                                    // Facebook Pixel
     ];
     
     const isSafeAdConfig = safePatterns.some(pattern => pattern.test(scriptContent));
-    if (!isSafeAdConfig) {
-      // Check if it's a simple variable assignment for ads
-      const simpleAdConfig = /^\s*(var|let|const)?\s*\w+\s*=\s*\{[^}]*\}\s*;?\s*$/s;
-      if (!simpleAdConfig.test(scriptContent)) {
-        return true;
-      }
-    }
+    if (isSafeAdConfig) continue;
+    
+    // Allow simple variable/object assignments (common in ad configs)
+    const simpleAdConfig = /^\s*(var|let|const)?\s*\w+\s*=\s*(\{[\s\S]*\}|\[[\s\S]*\]|['"][^'"]*['"]|\d+|true|false)\s*;?\s*$/s;
+    if (simpleAdConfig.test(scriptContent)) continue;
+    
+    // Allow ad SDK function calls (e.g., mgid.something(), outbrain.push())
+    const adSdkCall = /^\s*\(?\s*\w+(\.\w+)*\s*=\s*\w+(\.\w+)*\s*\|\|\s*\[\s*\]\s*\)\s*\.\s*push\s*\(/;
+    if (adSdkCall.test(scriptContent)) continue;
+    
+    // If none of the safe patterns match, it's potentially unsafe
+    return true;
   }
   return false;
 };
@@ -224,6 +231,8 @@ const LOCATIONS = [
   { value: 'header', label: 'Header (before </head>)' },
   { value: 'body-start', label: 'Body Start (after <body>)' },
   { value: 'body-end', label: 'Body End (before </body>)' },
+  { value: 'article_top', label: 'Article Top' },
+  { value: 'article_bottom', label: 'Article Bottom' },
   { value: 'sidebar', label: 'Sidebar' },
   { value: 'in-content', label: 'In-Content' },
   { value: 'footer', label: 'Footer' },
