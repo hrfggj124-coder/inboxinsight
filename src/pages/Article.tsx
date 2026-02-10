@@ -8,7 +8,7 @@ import { LikeButton } from "@/components/articles/LikeButton";
 import { CommentSection } from "@/components/articles/CommentSection";
 import { ShareButtons } from "@/components/articles/ShareButtons";
 import { ArticleContentWithAds } from "@/components/articles/ArticleContentWithAds";
-import { HTMLSnippetRenderer } from "@/hooks/useHTMLSnippets";
+import { AdPlaceholder } from "@/components/ads/AdPlaceholder";
 import { useArticle } from "@/hooks/useArticles";
 import { useRealtimeComments } from "@/hooks/useRealtimeComments";
 import { useRealtimeLikes } from "@/hooks/useRealtimeLikes";
@@ -211,7 +211,7 @@ const Article = () => {
             </div>
 
             {/* Custom HTML Snippet - Article Top */}
-            <HTMLSnippetRenderer location="article_top" className="my-4" />
+            <AdPlaceholder location="article_top" className="my-4" fallbackHeight="90px" />
 
             {/* Article Body with In-Content Ads */}
             <ArticleContentWithAds 
@@ -221,7 +221,7 @@ const Article = () => {
             />
 
             {/* Custom HTML Snippet - Article Bottom */}
-            <HTMLSnippetRenderer location="article_bottom" className="my-4" />
+            <AdPlaceholder location="article_bottom" className="my-4" fallbackHeight="90px" />
 
             {/* Tags */}
             <div className="mt-8 pt-6 border-t border-border">
