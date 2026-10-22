@@ -18,7 +18,7 @@ export const AdPlaceholder = ({
   const [hasContent, setHasContent] = useState<boolean | null>(null);
   const [loadError, setLoadError] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const checkTimeoutRef = useRef<NodeJS.Timeout>();
+  const checkTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     // Check if ad content loaded after a delay
