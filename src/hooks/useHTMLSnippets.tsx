@@ -79,6 +79,8 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
       ALLOWED_ATTR: [
         'id', 'class', 'style', 'href', 'src', 'alt', 'title', 'target', 'rel',
         'width', 'height', 'frameborder', 'allowfullscreen', 'loading',
+        'allow', 'scrolling', 'referrerpolicy', 'marginwidth', 'marginheight',
+        'align', 'seamless',
         'data-ad-client', 'data-ad-slot', 'data-ad-format', 'data-full-width-responsive',
         'name', 'content'
       ],
