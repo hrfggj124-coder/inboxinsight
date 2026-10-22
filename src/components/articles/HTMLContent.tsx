@@ -145,6 +145,7 @@ export const HTMLContent = ({ content, className = "", trusted = false }: HTMLCo
         "href", "target", "rel", "title", "alt", "src", "width", "height",
         "class", "id", "style",
         "frameborder", "allowfullscreen", "allow", "loading",
+        "scrolling", "referrerpolicy", "marginwidth", "marginheight", "seamless",
         "data-ad-client", "data-ad-slot", "data-ad-format", "data-full-width-responsive",
         "controls", "autoplay", "muted", "loop", "poster", "preload",
         "type", "name", "content",
