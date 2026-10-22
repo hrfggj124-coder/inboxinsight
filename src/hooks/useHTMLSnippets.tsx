@@ -79,6 +79,8 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
       ALLOWED_ATTR: [
         'id', 'class', 'style', 'href', 'src', 'alt', 'title', 'target', 'rel',
         'width', 'height', 'frameborder', 'allowfullscreen', 'loading',
+        'allow', 'scrolling', 'referrerpolicy', 'marginwidth', 'marginheight',
+        'align', 'seamless',
         'data-ad-client', 'data-ad-slot', 'data-ad-format', 'data-full-width-responsive',
         'name', 'content'
       ],
@@ -104,6 +106,43 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
     if (!hasScripts && !hasInlineScripts) return;
     
     const scriptElements: HTMLScriptElement[] = [];
+    
+    // Capture document.write from legacy ad tags (Adsterra, etc.) that rely on it.
+    // Dynamically injected scripts calling document.write would otherwise wipe or
+    // misplace page content; redirect their output into the ad container instead.
+    let safetyTimeout: ReturnType<typeof setTimeout> | undefined;
+    const container = containerRef.current;
+    let writeCaptureActive = false;
+    const origWrite = document.write.bind(document);
+    const origWriteln = document.writeln.bind(document);
+    let remainingScripts = snippetData.scripts.length;
+
+    const restoreDocWrite = () => {
+      if (!writeCaptureActive) return;
+      writeCaptureActive = false;
+      document.write = origWrite;
+      document.writeln = origWriteln;
+    };
+
+    if (location !== 'head' && hasScripts && container) {
+      writeCaptureActive = true;
+      document.write = (markup: string) => {
+        if (container.isConnected) {
+          container.insertAdjacentHTML('beforeend', markup);
+        } else {
+          origWrite(markup);
+        }
+      };
+      document.writeln = (markup: string) => {
+        if (container.isConnected) {
+          container.insertAdjacentHTML('beforeend', `${markup}\n`);
+        } else {
+          origWriteln(markup);
+        }
+      };
+      // Safety net: never leave document.write overridden
+      safetyTimeout = setTimeout(restoreDocWrite, 15000);
+    }
     
     // First inject inline scripts (config variables like atOptions)
     if (hasInlineScripts) {
@@ -136,7 +175,10 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
       snippetData.scripts.forEach((src) => {
         // Check if script is already loaded
         const existingScript = document.querySelector(`script[src="${src}"]`);
-        if (existingScript) return;
+        if (existingScript) {
+          remainingScripts--;
+          return;
+        }
         
         const script = document.createElement('script');
         script.src = src;
@@ -151,6 +193,16 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
         } else {
           document.body.appendChild(script);
         }
+
+        // Restore document.write once every snippet script has finished loading
+        script.addEventListener('load', () => {
+          remainingScripts--;
+          if (remainingScripts <= 0) restoreDocWrite();
+        });
+        script.addEventListener('error', () => {
+          remainingScripts--;
+          if (remainingScripts <= 0) restoreDocWrite();
+        });
         
         scriptElements.push(script);
       });
@@ -158,6 +210,8 @@ export const HTMLSnippetRenderer = ({ location, className = "" }: HTMLSnippetRen
     
     return () => {
       clearTimeout(scriptTimeout);
+      if (safetyTimeout) clearTimeout(safetyTimeout);
+      restoreDocWrite();
       scriptElements.forEach(script => {
         if (script.parentNode) {
           script.parentNode.removeChild(script);
