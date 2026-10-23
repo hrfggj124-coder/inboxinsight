@@ -202,6 +202,15 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
+    // Normalize location aliases so both naming styles resolve to stored rows
+    const locationAliases: Record<string, string[]> = {
+      'body_start': ['body-start', 'body_start'],
+      'body_end': ['body-end', 'body_end'],
+      'body-start': ['body-start', 'body_start'],
+      'body-end': ['body-end', 'body_end'],
+    };
+    const locationVariants = locationAliases[location] || [location];
+
     // Use service role to bypass RLS and fetch snippets
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -210,7 +219,7 @@ const handler = async (req: Request): Promise<Response> => {
     const { data: snippets, error } = await adminSupabase
       .from('html_snippets')
       .select('code, priority')
-      .eq('location', location)
+      .in('location', locationVariants)
       .eq('is_active', true)
       .order('priority', { ascending: false });
 
