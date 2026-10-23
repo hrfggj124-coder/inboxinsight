@@ -15,14 +15,17 @@ export const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Global HTML Snippets - Body Start */}
-      <AdPlaceholder location="body_start" showFallback={false} />
-      
+      <AdPlaceholder location="body-start" showFallback={false} />
+
+      {/* Header snippets (e.g. Adsterra Social Bar) inject their scripts globally */}
+      <AdPlaceholder location="header" showFallback={false} className="hidden" />
+
       <Header />
       <main className="flex-1">{children}</main>
       <Footer />
       
       {/* Global HTML Snippets - Body End */}
-      <AdPlaceholder location="body_end" showFallback={false} />
+      <AdPlaceholder location="body-end" showFallback={false} />
     </div>
   );
 };
